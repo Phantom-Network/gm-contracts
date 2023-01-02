@@ -11,7 +11,7 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Install Foundry
+      - name: foundry-toolchain
         uses: foundry-rs/foundry-toolchain@v1
         with:
           version: nightly
