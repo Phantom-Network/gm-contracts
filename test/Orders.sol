@@ -33,7 +33,7 @@ contract Orders is BaseSetup {
         );
 
         vm.startPrank(buyer);
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(buyerPrivateKey, digest);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPrivateKey, digest);
         
         greyMarket.createOrder{value: testAmount}(
             orderId, 
@@ -74,8 +74,10 @@ contract Orders is BaseSetup {
         );
 
         vm.startPrank(buyer);
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(buyerPrivateKey, digest);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPrivateKey, digest);
         
+        uint256 sellerBalanceBefore = address(seller).balance;
+
         greyMarket.createOrder{value: testAmount}(
             orderId, 
             seller, 
@@ -150,9 +152,9 @@ contract Orders is BaseSetup {
             )
         );
 
-        vm.startPrank(buyer);
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(buyerPrivateKey, digest);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPrivateKey, digest);
         
+        vm.prank(buyer);
         greyMarket.createOrder{value: testAmount}(
             orderId, 
             seller, 
@@ -162,7 +164,8 @@ contract Orders is BaseSetup {
             Sig(v, r, s)
         );
 
-        vm.stopPrank();
+        OrderInfo memory order = greyMarket.getOrderInfo(orderId);
+        uint256 sellerBalanceBefore = address(seller).balance;
 
         digest = keccak256(
             abi.encodePacked(
@@ -180,8 +183,18 @@ contract Orders is BaseSetup {
             )
         );
 
-        vm.startPrank(seller);
-        (v, r, s) = vm.sign(sellerPrivateKey, digest);
-        greyMarket.claimOrder(orderId, buyer, seller, Sig(v, r, s));
+        vm.prank(signer);
+        (v, r, s) = vm.sign(signerPrivateKey, digest);
+        vm.stopPrank();
+
+        vm.prank(seller);
+        greyMarket.claimOrder(
+            orderId, 
+            buyer, 
+            seller, 
+            Sig(v, r, s)
+        );
+
+        assertEq(sellerBalanceBefore + order.amount, address(seller).balance);
     }
 }
