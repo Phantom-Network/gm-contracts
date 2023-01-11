@@ -63,11 +63,9 @@ contract GreyMarket is OwnableUpgradeable, ReentrancyGuardUpgradeable, GreyMarke
             )
         );
         
-    address immutable USDC_TOKEN_ADDRESS;
-
     constructor(address _usdc) {
         require(_usdc != address(0), "invalid token address");
-        USDC_TOKEN_ADDRESS = _usdc;
+        paymentTokens[_usdc] = true;
     }
     
     function initialize(address _proofSigner) public initializer {
@@ -96,7 +94,7 @@ contract GreyMarket is OwnableUpgradeable, ReentrancyGuardUpgradeable, GreyMarke
         Sig calldata sig
     ) external payable {
         require(validateCreateOrder(sig, id, msg.sender, seller, paymentToken, uint256(orderType), amount), "createOrder: invalid signature");
-        require(paymentToken == address(0) || paymentToken == USDC_TOKEN_ADDRESS, "createOrder: invalid payment token");
+        require(paymentToken == address(0) || paymentTokens[paymentToken], "createOrder: invalid payment token");
         require(orderType <= OrderType.DIRECT, "createOrder: invalid order type");
         OrderInfo storage orderInfo = orders[id];
         require(orderInfo.status == OrderStatus.ORDER_NONE, "createOrder: invalid status");
@@ -110,8 +108,8 @@ contract GreyMarket is OwnableUpgradeable, ReentrancyGuardUpgradeable, GreyMarke
         if (paymentToken == address(0)) {
             orderInfo.amount = msg.value;
             orderInfo.paymentType = PaymentType.PAYMENT_ETH;
-        } else if (paymentToken == USDC_TOKEN_ADDRESS) {
-            IERC20(USDC_TOKEN_ADDRESS).safeTransferFrom(msg.sender, address(this), amount);
+        } else {
+            IERC20(paymentToken).safeTransferFrom(msg.sender, address(this), amount);
             orderInfo.amount = amount;
             orderInfo.paymentType = PaymentType.PAYMENT_USDC;
         }
@@ -142,13 +140,20 @@ contract GreyMarket is OwnableUpgradeable, ReentrancyGuardUpgradeable, GreyMarke
         require(orderInfo.buyer == buyer, "claimOrder: invalid buyer info");
         require(orderInfo.orderType <= OrderType.DIRECT, "claimOrder: invalid order type");
 
-        uint256 fee = orderInfo.amount * escrowFee / 1e18;
+        uint256 fee = orderInfo.amount * (transactionFee / 1000) / 100;
+
+        if(orderInfo.orderType == OrderType.ESCROW) {
+            uint256 escrowFee = orderInfo.amount * (defaultEscrowFee / 1000) / 1000;
+            fee += escrowFee * 10 / 100;
+            escrowFees[orderInfo.seller] = escrowFees[orderInfo.seller] + escrowFee * 90 / 100;
+        }
+
         adminFees[orderInfo.paymentToken] = adminFees[orderInfo.paymentToken] + fee;
 
         if (orderInfo.paymentType == PaymentType.PAYMENT_ETH)
             payable(orderInfo.seller).transfer(orderInfo.amount - fee);
-        else if (orderInfo.paymentType == PaymentType.PAYMENT_USDC)
-            IERC20(USDC_TOKEN_ADDRESS).safeTransfer(orderInfo.seller, orderInfo.amount - fee);
+        else
+            IERC20(orderInfo.paymentToken).safeTransfer(orderInfo.seller, orderInfo.amount - fee);
 
         orderInfo.status = OrderStatus.ORDER_COMPLETED;
         orderInfo.completedAt = uint128(block.timestamp);
@@ -202,8 +207,17 @@ contract GreyMarket is OwnableUpgradeable, ReentrancyGuardUpgradeable, GreyMarke
 
         if (orderInfo.paymentType == PaymentType.PAYMENT_ETH)
             payable(orderInfo.buyer).transfer(orderInfo.amount);
-        else if (orderInfo.paymentType == PaymentType.PAYMENT_USDC)
-            IERC20(USDC_TOKEN_ADDRESS).safeTransfer(orderInfo.buyer, orderInfo.amount);
+        else
+            IERC20(orderInfo.paymentToken).safeTransfer(orderInfo.buyer, orderInfo.amount);
+
+        uint256 remainingEscrowFees = escrowFees[orderInfo.seller];
+        if(remainingEscrowFees > 0) {
+            escrowFees[orderInfo.seller] = 0;
+            if (orderInfo.paymentType == PaymentType.PAYMENT_ETH)
+                payable(orderInfo.seller).transfer(remainingEscrowFees);
+            else
+                IERC20(orderInfo.paymentToken).safeTransfer(orderInfo.seller, remainingEscrowFees);
+        }
             
         orderInfo.status = OrderStatus.ORDER_CANCELLED;
         orderInfo.cancelledAt = uint128(block.timestamp);
@@ -234,8 +248,8 @@ contract GreyMarket is OwnableUpgradeable, ReentrancyGuardUpgradeable, GreyMarke
 
         if (orderInfo.paymentType == PaymentType.PAYMENT_ETH)
             payable(winner).transfer(orderInfo.amount);
-        else if (orderInfo.paymentType == PaymentType.PAYMENT_USDC)
-            IERC20(USDC_TOKEN_ADDRESS).safeTransfer(winner, orderInfo.amount);
+        else
+            IERC20(orderInfo.paymentToken).safeTransfer(winner, orderInfo.amount);
 
         orderInfo.status = OrderStatus.ORDER_DISPUTE_HANDLED;
         orderInfo.disputedAt = uint128(block.timestamp);
@@ -249,9 +263,7 @@ contract GreyMarket is OwnableUpgradeable, ReentrancyGuardUpgradeable, GreyMarke
      */
     function _setProofSigner(address newProofSigner) external onlyOwner {
         require(newProofSigner != address(0), "invalid proof signer");
-
         proofSigner = newProofSigner;
-
         emit NewProofSigner(proofSigner);
     }
 
@@ -261,10 +273,32 @@ contract GreyMarket is OwnableUpgradeable, ReentrancyGuardUpgradeable, GreyMarke
      * @param newAdmins The new admin.
      */
     function _setNewAdmins(address[] calldata newAdmins) external onlyOwner {
-        require(newAdmins.length != 0, "invalid admins length");
+        require(newAdmins.length > 0, "invalid admins length");
         admins = newAdmins;
         emit NewAdmins(admins);
     }
+
+    /**
+     * @notice Add new payment token
+     * @dev Admin function to add new payment token
+     * @param paymentToken Supported payment token
+     * @param add Add or remove admin.
+     */
+    function _addOrRemovePaymentToken(address paymentToken, bool add) external onlyOwner {
+        require(paymentToken != address(0), "invalid payment token");
+        paymentTokens[paymentToken] = add;
+    }
+
+    /**
+     * @notice Sets the transaction fee 
+     * @dev Admin function to set the transaction fee
+     * @param newFee escrow fee recipient.
+     */
+     function _setTransactionFee(uint256 newFee) external onlyOwner {
+        require(newFee <= MAX_TRANSACTION_FEE, "invalid fee range");
+        transactionFee = newFee;
+        emit NewTransactionFee(newFee);
+     }
 
     /**
      * @notice Sets the escrow fee.
@@ -273,8 +307,8 @@ contract GreyMarket is OwnableUpgradeable, ReentrancyGuardUpgradeable, GreyMarke
      */
     function _setEscrowFee(uint256 newEscrowFee) external onlyOwner {
         require(newEscrowFee <= MAX_ESCROW_FEE, "invalid fee range");
-        escrowFee = newEscrowFee;
-        emit NewEscrowFee(escrowFee);
+        defaultEscrowFee = newEscrowFee;
+        emit NewEscrowFee(newEscrowFee);
     }
 
     /**
@@ -285,7 +319,6 @@ contract GreyMarket is OwnableUpgradeable, ReentrancyGuardUpgradeable, GreyMarke
     function _setEscrowPendingPeriod(uint256 newEscrowPendingPeriod) external onlyOwner {
         require(newEscrowPendingPeriod <= MAX_ESCROW_PENDING_PERIOD, "pending period must not exceed maximum period");
         require(newEscrowPendingPeriod >= MIN_ESCROW_PENDING_PERIOD, "pending period must exceed minimum period");
-
         escrowPendingPeriod = newEscrowPendingPeriod;
         emit NewEscrowPendingPeriod(escrowPendingPeriod);
     }
@@ -298,7 +331,6 @@ contract GreyMarket is OwnableUpgradeable, ReentrancyGuardUpgradeable, GreyMarke
     function _setEscrowLockPeriod(uint256 newEscrowLockPeriod) external onlyOwner {
         require(newEscrowLockPeriod <= MAX_ESCROW_LOCK_PERIOD, "lock period must not exceed maximum period");
         require(newEscrowLockPeriod >= MIN_ESCROW_LOCK_PERIOD, "lock period must exceed minimum period");
-
         escrowLockPeriod = newEscrowLockPeriod;
         emit NewEscrowLockPeriod(escrowLockPeriod);
     }
@@ -338,7 +370,7 @@ contract GreyMarket is OwnableUpgradeable, ReentrancyGuardUpgradeable, GreyMarke
         if (orderInfo.paymentToken == address(0))
             payable(recipient).transfer(orderInfo.amount);
         else
-            IERC20(USDC_TOKEN_ADDRESS).safeTransfer(recipient, orderInfo.amount);
+            IERC20(orderInfo.paymentToken).safeTransfer(recipient, orderInfo.amount);
 
         orderInfo.status = OrderStatus.ORDER_ADMIN_WITHDRAWN;
         emit WithdrawLockedFund(msg.sender, id, recipient, orderInfo.amount);

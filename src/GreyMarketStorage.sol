@@ -15,7 +15,9 @@ contract GreyMarketStorage {
 
     address[] public admins;
 
-    uint256 public escrowFee;
+    uint256 public transactionFee = 5000;
+
+    uint256 public defaultEscrowFee = 2900;
 
     uint256 public escrowPendingPeriod;
 
@@ -23,5 +25,9 @@ contract GreyMarketStorage {
 
     mapping(address => uint256) public adminFees;
 
+    mapping(address => uint256) public escrowFees;
+
     mapping(bytes32 => OrderInfo) public orders;
+
+    mapping(address => bool) public paymentTokens;
 }
