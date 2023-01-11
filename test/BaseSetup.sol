@@ -13,11 +13,10 @@ contract BaseSetup is Test {
 
     address payable[] internal users;
     address internal owner;
-    uint256 internal buyerPrivateKey;
     address internal buyer;
-    uint256 internal sellerPrivateKey;
     address internal seller;
     address internal signer;
+    uint256 internal signerPrivateKey;
     address internal nativeEthPaymentToken = 0x0000000000000000000000000000000000000000;
     uint256 internal testAmount = 10000000000000000;
         
@@ -25,21 +24,19 @@ contract BaseSetup is Test {
     function setUp() public virtual {
         // generate fake users
         utils = new Utilities();
-        users = utils.createUsers(2);
+        users = utils.createUsers(3);
         owner = users[0];
-        signer = users[1];
-
-        buyerPrivateKey = uint256(keccak256(abi.encodePacked(block.timestamp, block.difficulty)));
-        buyer = vm.addr(buyerPrivateKey);
-
-        sellerPrivateKey = uint256(keccak256(abi.encodePacked(block.timestamp, block.difficulty)));
-        seller = vm.addr(sellerPrivateKey);
+        seller = users[1];
+        buyer = users[2];
+        
+        signerPrivateKey = uint256(keccak256(abi.encodePacked(block.timestamp, block.difficulty)));
+        signer = vm.addr(signerPrivateKey);
 
         mockERC20 = new MockERC20(buyer);
 
         vm.startPrank(owner);
         greyMarket = new GreyMarket(address(mockERC20));
-        greyMarket.initialize(buyer);
+        greyMarket.initialize(signer);
         vm.stopPrank();
 
         vm.deal(buyer, 100 ether);

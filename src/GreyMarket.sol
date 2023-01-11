@@ -549,4 +549,26 @@ contract GreyMarket is OwnableUpgradeable, ReentrancyGuardUpgradeable, GreyMarke
     function _nameString() public pure returns (string memory) {
         return "GreyMarket";
     }
+
+    /**
+     * @notice UUID V4 to bytes32 representation in Solidity
+     * @param s UUID V4 string
+     */
+    function UUIDStringToBytes32(string memory s) public pure returns (bytes32) {
+        bytes memory bytesArray = bytes(s);
+        bytes memory noDashes = new bytes(32);
+        uint index;
+        for (uint256 i; i < bytesArray.length; i++) {
+            if (bytesArray[i] == "-") {
+                continue;
+            }
+            noDashes[index] = bytesArray[i];
+            index++;
+        }
+        bytes32 result;
+        assembly {
+            result := mload(add(noDashes, 32))
+        }
+        return result;
+    }
 }
