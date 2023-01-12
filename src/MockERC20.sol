@@ -15,7 +15,7 @@ contract MockERC20 is ERC20 {
      * @dev Constructor that gives _msgSender() all of existing tokens.
      */
     constructor (address to) ERC20("Mock USDC", "USDC") {
-        _mint(to, 10000 * (10 ** uint256(decimals())));
+        _mint(to, 1000000 * (10 ** uint256(decimals())));
     }
 
     /** 

@@ -16,19 +16,20 @@ contract Deploy is Script {
         deployer = vm.envAddress("DEPLOYER_ADDRESS");
         vm.startBroadcast(deployer);
 
-        //MockERC20 usdc = new MockERC20(deployer);
-        //console.log("USDC contract deployed at address: ", address(usdc));
+        MockERC20 usdc = new MockERC20(deployer);
+        console.log("USDC contract deployed at address: ", address(usdc));
 
-        GreyMarket gm = new GreyMarket(address(0x7D7DFd9686B0eCc19ee5FF3D9FD5c08e1C870076));
+        GreyMarket gm = new GreyMarket(address(usdc));
         console.log("Grey Market contract deployed at address: ", address(gm));
 
-        /*GreyMarketProxy proxy = new GreyMarketProxy(
+        GreyMarketProxy proxy = new GreyMarketProxy(
             address(gm), 
             deployer,
-            abi.encodeWithSignature("initialize(address)", vm.envAddress("PROOF_SIGNER"))
+            abi.encodeWithSignature("initialize(address)", 
+            vm.envAddress("PROOF_SIGNER"))
         );
 
-        console.log("Grey Market Proxy contract deployed at address: ", address(proxy));*/
+        console.log("Grey Market Proxy contract deployed at address: ", address(proxy));
         vm.stopBroadcast();
     }
 }
