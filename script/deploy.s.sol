@@ -5,6 +5,7 @@ import "forge-std/Script.sol";
 import {console} from "forge-std/console.sol";
 import "forge-std/Vm.sol";
 import "../src/GreyMarket.sol";
+import "../src/GreyMarketProxy.sol";
 import "../src/MockERC20.sol";
 
 contract Deploy is Script {
@@ -20,8 +21,15 @@ contract Deploy is Script {
 
         GreyMarket gm = new GreyMarket(address(usdc));
         console.log("Grey Market contract deployed at address: ", address(gm));
-        gm.initialize(vm.envAddress("PROOF_SIGNER"));
 
+        GreyMarketProxy proxy = new GreyMarketProxy(
+            address(gm), 
+            deployer,
+            abi.encodeWithSignature("initialize(address)", 
+            vm.envAddress("PROOF_SIGNER"))
+        );
+
+        console.log("Grey Market Proxy contract deployed at address: ", address(proxy));
         vm.stopBroadcast();
     }
 }

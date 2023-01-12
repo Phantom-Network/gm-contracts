@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.9;
 
-uint256 constant MAX_ESCROW_FEE = 1e18;
+uint256 constant MAX_TRANSACTION_FEE = 10;
+uint256 constant MAX_ESCROW_FEE = 5;
 uint256 constant MAX_ESCROW_PENDING_PERIOD = 6 * 30 days;
 uint256 constant MIN_ESCROW_PENDING_PERIOD = 7 days;
 uint256 constant REQUIRED_SIGNATURE_COUNT = 2;

@@ -9,7 +9,6 @@ pragma solidity ^0.8.9;
  *         (physical/digital assets) using cryptocurrencies.
  */
 contract GreyMarketEvent {
-
     event NewProofSigner(address newProofSigner);
 
     event OrderCreated(bytes32 id, address indexed buyer, address indexed seller, uint8 paymentType, uint8 orderType, uint256 blockTimestamp, uint256 amount);
@@ -31,4 +30,6 @@ contract GreyMarketEvent {
     event WithdrawAdminFee(address caller, address recipient, address token, uint256 amount);
 
     event WithdrawLockedFund(address caller, bytes32 orderId, address recipient, uint256 amount);
+
+    event NewTransactionFee(uint256 newTransactionFee);
 }
