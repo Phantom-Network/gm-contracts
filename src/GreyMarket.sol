@@ -62,7 +62,9 @@ contract GreyMarket is OwnableUpgradeable, ReentrancyGuardUpgradeable, GreyMarke
             )
         );
         
-    constructor() {}
+    constructor() {
+        _disableInitializers();
+    }
     
     function initialize(address _proofSigner, address _usdc) public initializer {
         require(_usdc != address(0) && _proofSigner != address(0), "invalid token or signer address");
