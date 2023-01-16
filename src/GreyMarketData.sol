@@ -6,8 +6,6 @@ uint256 constant MAX_ESCROW_FEE = 5000;
 uint256 constant MAX_ESCROW_PENDING_PERIOD = 6 * 30 days;
 uint256 constant MIN_ESCROW_PENDING_PERIOD = 7 days;
 uint256 constant REQUIRED_SIGNATURE_COUNT = 2;
-
-uint256 constant ORDER_TYPE_COUNT = 2;
 uint256 constant MAX_ESCROW_LOCK_PERIOD = 12 * 30 days;
 uint256 constant MIN_ESCROW_LOCK_PERIOD = 6 * 30 days;
 
