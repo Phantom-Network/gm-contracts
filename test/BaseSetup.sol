@@ -35,8 +35,8 @@ contract BaseSetup is Test {
         mockERC20 = new MockERC20(buyer);
 
         vm.startPrank(owner);
-        greyMarket = new GreyMarket(address(mockERC20));
-        greyMarket.initialize(signer);
+        greyMarket = new GreyMarket();
+        greyMarket.initialize(address(mockERC20), signer);
         vm.stopPrank();
 
         vm.deal(buyer, 100 ether);

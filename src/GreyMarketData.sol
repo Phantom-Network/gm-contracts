@@ -1,18 +1,17 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.9;
 
-uint256 constant MAX_TRANSACTION_FEE = 10;
-uint256 constant MAX_ESCROW_FEE = 5;
+uint256 constant MAX_TRANSACTION_FEE = 10000;
+uint256 constant MAX_ESCROW_FEE = 5000;
 uint256 constant MAX_ESCROW_PENDING_PERIOD = 6 * 30 days;
 uint256 constant MIN_ESCROW_PENDING_PERIOD = 7 days;
 uint256 constant REQUIRED_SIGNATURE_COUNT = 2;
-
 uint256 constant MAX_ESCROW_LOCK_PERIOD = 12 * 30 days;
 uint256 constant MIN_ESCROW_LOCK_PERIOD = 6 * 30 days;
 
 enum PaymentType {
     PAYMENT_ETH,
-    PAYMENT_USDC
+    PAYMENT_ERC20
 }
 
 enum OrderStatus {
@@ -30,7 +29,8 @@ enum OrderStatus {
 
 enum OrderType {
     ESCROW,
-    DIRECT
+    DIRECT,
+    COUNT
 }
 
 struct OrderInfo {

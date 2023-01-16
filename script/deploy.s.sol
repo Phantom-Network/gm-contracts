@@ -6,26 +6,23 @@ import {console} from "forge-std/console.sol";
 import "forge-std/Vm.sol";
 import "../src/GreyMarket.sol";
 import "../src/GreyMarketProxy.sol";
-import "../src/MockERC20.sol";
 
 contract Deploy is Script {
     address deployer;
 
      function run() external {
-        console.log("Deploying Mock USDC Contract");
         deployer = vm.envAddress("DEPLOYER_ADDRESS");
         vm.startBroadcast(deployer);
 
-        MockERC20 usdc = new MockERC20(deployer);
-        console.log("USDC contract deployed at address: ", address(usdc));
-
-        GreyMarket gm = new GreyMarket(address(usdc));
+        GreyMarket gm = new GreyMarket();
         console.log("Grey Market contract deployed at address: ", address(gm));
 
+        
         GreyMarketProxy proxy = new GreyMarketProxy(
             address(gm), 
             deployer,
-            abi.encodeWithSignature("initialize(address)", 
+            abi.encodeWithSignature("initialize(address,address)", 
+            address(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48),
             vm.envAddress("PROOF_SIGNER"))
         );
 
