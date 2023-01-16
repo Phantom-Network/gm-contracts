@@ -19,13 +19,14 @@ contract Deploy is Script {
         MockERC20 usdc = new MockERC20(deployer);
         console.log("USDC contract deployed at address: ", address(usdc));
 
-        GreyMarket gm = new GreyMarket(address(usdc));
+        GreyMarket gm = new GreyMarket();
         console.log("Grey Market contract deployed at address: ", address(gm));
 
         GreyMarketProxy proxy = new GreyMarketProxy(
             address(gm), 
             deployer,
-            abi.encodeWithSignature("initialize(address)", 
+            abi.encodeWithSignature("initialize(address,address)", 
+            address(usdc),
             vm.envAddress("PROOF_SIGNER"))
         );
 
