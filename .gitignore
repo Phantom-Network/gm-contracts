@@ -6,4 +6,7 @@ out/
 /broadcast/
 
 # Dotenv file
-.env
+.env*
+
+# Misc
+.DS_Store*
