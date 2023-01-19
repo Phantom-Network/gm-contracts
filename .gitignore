@@ -1,0 +1,12 @@
+# Compiler files
+cache/
+out/
+
+# Ignores development broadcast logs
+/broadcast/
+
+# Dotenv file
+.env*
+
+# Misc
+.DS_Store*
