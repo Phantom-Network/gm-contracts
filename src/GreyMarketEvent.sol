@@ -2,11 +2,12 @@
 pragma solidity ^0.8.9;
 
 /**
- * @title GreyMarketEvent
- * @author @bldr
- * @notice The Grey Market is a Peer-To-Peer (P2P) marketplace platform designed to utilise
- *         blockchain technology for proof of transactions and allow users to trade items
- *         (physical/digital assets) using cryptocurrencies.
+ * @title gm.co Event
+ * @author projectPXN
+ * @custom:coauthor bldr
+ * @notice gm.co is a Business-to-Consumer (B2C) and Peer-to-Peer (P2P) marketplace
+ *         using blockchain technology for proof of transactions and allow users
+ *         to buy and sell real world goods using cryptocurrency.
  */
 contract GreyMarketEvent {
     event NewProofSigner(address newProofSigner);

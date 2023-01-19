@@ -4,11 +4,12 @@ pragma solidity ^0.8.9;
 import "./GreyMarketData.sol";
 
 /**
- * @title GreyMarketStorage
- * @author @bldr
- * @notice The Grey Market is a Peer-To-Peer (P2P) marketplace platform designed to utilise
- *         blockchain technology for proof of transactions and allow users to trade items
- *         (physical/digital assets) using cryptocurrencies.
+ * @title gm.co Storage
+ * @author projectPXN
+ * @custom:coauthor bldr
+ * @notice gm.co is a Business-to-Consumer (B2C) and Peer-to-Peer (P2P) marketplace
+ *         using blockchain technology for proof of transactions and allow users
+ *         to buy and sell real world goods using cryptocurrency.
  */
 contract GreyMarketStorage {
     address public proofSigner;
@@ -25,9 +26,9 @@ contract GreyMarketStorage {
 
     mapping(address => uint256) public adminFees;
 
-    mapping(address => uint256) public escrowFees;
+    mapping(address => mapping(address => uint256)) public escrowFees;
 
-    mapping(bytes32 => OrderInfo) public orders;
+    mapping(bytes32 => Order) public orders;
 
     mapping(address => bool) public paymentTokens;
 }

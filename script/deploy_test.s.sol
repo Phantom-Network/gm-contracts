@@ -5,6 +5,7 @@ import "forge-std/Script.sol";
 import {console} from "forge-std/console.sol";
 import "forge-std/Vm.sol";
 import "../src/GreyMarket.sol";
+import "../src/MockERC20.sol";
 
 contract Deploy is Script {
     address deployer;
@@ -13,7 +14,8 @@ contract Deploy is Script {
         deployer = vm.envAddress("DEPLOYER_ADDRESS");
         vm.startBroadcast(deployer);
 
-        GreyMarket gm = new GreyMarket(vm.envAddress("PROOF_SIGNER"), vm.envAddress("USDC_ADDRESS"));
+        MockERC20 usdc = new MockERC20(deployer);
+        GreyMarket gm = new GreyMarket(vm.envAddress("PROOF_SIGNER"), address(usdc));
         console.log("Grey Market contract deployed at address: ", address(gm));
         
         vm.stopBroadcast();

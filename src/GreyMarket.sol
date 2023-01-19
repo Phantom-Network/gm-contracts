@@ -1,59 +1,35 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.9;
 
-import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./GreyMarketStorage.sol";
 import "./GreyMarketEvent.sol";
 import "./GreyMarketData.sol";
-import {
-    PaymentType,
-    OrderType,
-    OrderStatus
-} from "./GreyMarketData.sol";
 
-/**
- * @title GreyMarket
- * @custom:version 0.1
- * @author @bldr
- * @notice The Grey Market is a Peer-To-Peer (P2P) marketplace platform designed to utilise
- *         blockchain technology for proof of transactions and allow users to trade items
- *         (physical/digital assets) using cryptocurrencies.
+/** 
+ * @title gm.co
+ * @custom:version 1.0
+ * @author projectPXN
+ * @custom:coauthor bldr
+ * @notice gm.co is a Business-to-Consumer (B2C) and Peer-to-Peer (P2P) marketplace
+ *         using blockchain technology for proof of transactions and allow users
+ *         to buy and sell real world goods using cryptocurrency.
  */
-contract GreyMarket is OwnableUpgradeable, ReentrancyGuardUpgradeable, GreyMarketStorage, GreyMarketEvent {
+contract GreyMarket is Ownable, ReentrancyGuard, GreyMarketStorage, GreyMarketEvent {
     using SafeERC20 for IERC20;
 
-    string public constant CONTRACT_NAME = "GreyMarket Contract";
-    
-    bytes32 public constant DOMAIN_TYPEHASH = 
-        keccak256(
-            "EIP712Domain(string name,uint256 chainId,address verifyingContract)"
-        );
-    
-    bytes32 public constant CREATE_ORDER_TYPEHASH = 
-        keccak256(
-            "Create(bytes32 id,address buyer,address seller,address paymentToken,uint256 orderType,uint256 amount)"
-        );
+    bytes32 private domainSeperator;
 
-    bytes32 public constant CLAIM_ORDER_TYPEHASH = 
-        keccak256(
-            "Claim(bytes32 id,address buyer,address seller,uint256 orderStatus)"
-        );
-    
-    bytes32 public constant WITHDRAW_ORDER_TYPEHASH = 
-        keccak256(
-            "Withdraw(bytes32 id,address buyer,address seller,uint256 orderStatus)"
-        );
+    constructor(address _proofSigner, address _usdc) {
+        require(_usdc != address(0) && _proofSigner != address(0), "invalid token or signer address");
 
-    bytes32 public constant RELEASE_DISPUTED_ORDER_TYPEHASH = 
-        keccak256(
-            "Release(bytes32 id,address buyer,address seller,uint256 orderStatus,address winner)"
-        );
+        proofSigner = _proofSigner;
+        paymentTokens[_usdc] = true;
 
-    bytes32 public domainSeperator = 
-        keccak256(
+        domainSeperator = keccak256(
             abi.encode(
                 DOMAIN_TYPEHASH, 
                 keccak256(bytes(CONTRACT_NAME)), 
@@ -61,18 +37,6 @@ contract GreyMarket is OwnableUpgradeable, ReentrancyGuardUpgradeable, GreyMarke
                 address(this)
             )
         );
-        
-    constructor() {
-        _disableInitializers();
-    }
-    
-    function initialize(address _proofSigner, address _usdc) public initializer {
-        require(_usdc != address(0) && _proofSigner != address(0), "invalid token or signer address");
-        __Ownable_init();
-        __ReentrancyGuard_init();
-
-        proofSigner = _proofSigner;
-        paymentTokens[_usdc] = true;
     }
 
     /**
@@ -96,27 +60,35 @@ contract GreyMarket is OwnableUpgradeable, ReentrancyGuardUpgradeable, GreyMarke
         require(validateCreateOrder(sig, id, msg.sender, seller, paymentToken, uint256(orderType), amount), "createOrder: invalid signature");
         require(paymentToken == address(0) || paymentTokens[paymentToken], "createOrder: invalid payment token");
         require(orderType < OrderType.COUNT, "createOrder: invalid order type");
-        OrderInfo storage orderInfo = orders[id];
-        require(orderInfo.status == OrderStatus.ORDER_NONE, "createOrder: invalid status");
+        Order storage order = orders[id];
+        require(order.status == OrderStatus.ORDER_NONE, "createOrder: invalid status");
 
-        orderInfo.id = id;
-        orderInfo.createdAt = uint128(block.timestamp);
-        orderInfo.buyer = msg.sender;
-        orderInfo.orderType = orderType;
-        orderInfo.seller = seller;
-        orderInfo.status = OrderStatus.ORDER_CREATED;
+        order.id = id;
+        order.createdAt = uint128(block.timestamp);
+        order.buyer = msg.sender;
+        order.orderType = orderType;
+        order.seller = seller;
+        order.status = OrderStatus.ORDER_CREATED;
 
         if (paymentToken == address(0)) {
-            orderInfo.amount = msg.value;
-            orderInfo.paymentType = PaymentType.PAYMENT_ETH;
+            order.amount = msg.value;
+            order.paymentType = PaymentType.PAYMENT_ETH;
         } else {
             IERC20(paymentToken).safeTransferFrom(msg.sender, address(this), amount);
-            orderInfo.amount = amount;
-            orderInfo.paymentType = PaymentType.PAYMENT_ERC20;
+            order.amount = amount;
+            order.paymentType = PaymentType.PAYMENT_ERC20;
         }
 
-        orderInfo.paymentToken = paymentToken;
-        emit OrderCreated(id, orderInfo.buyer, seller, uint8(orderInfo.paymentType), uint8(orderType), orderInfo.createdAt, orderInfo.amount);
+        order.paymentToken = paymentToken;
+        emit OrderCreated(
+            id, 
+            order.buyer, 
+            seller, 
+            uint8(order.paymentType), 
+            uint8(orderType), 
+            order.createdAt, 
+            order.amount
+        );
     }
 
     /**
@@ -134,30 +106,30 @@ contract GreyMarket is OwnableUpgradeable, ReentrancyGuardUpgradeable, GreyMarke
         Sig calldata sig
     ) public {
         require(validateClaimOrder(sig, id, buyer, seller, uint256(OrderStatus.ORDER_DELIVERED)), "claimOrder: invalid signature");
-        OrderInfo storage orderInfo = orders[id];
-        require(orderInfo.status == OrderStatus.ORDER_CREATED, "claimOrder: invalid status");
-        require(orderInfo.seller == msg.sender && orderInfo.seller == seller, "claimOrder: invalid seller");
-        require(orderInfo.buyer == buyer, "claimOrder: invalid buyer info");
-        require(orderInfo.orderType < OrderType.COUNT, "claimOrder: invalid order type");
+        Order storage order = orders[id];
+        require(order.status == OrderStatus.ORDER_CREATED, "claimOrder: invalid status");
+        require(order.seller == msg.sender && order.seller == seller, "claimOrder: invalid seller");
+        require(order.buyer == buyer, "claimOrder: invalid buyer info");
+        require(order.orderType < OrderType.COUNT, "claimOrder: invalid order type");
 
-        uint256 fee = orderInfo.amount * transactionFee / 100000;
+        uint256 fee = order.amount * transactionFee / 100000;
+        uint256 escrowFee;
 
-        if(orderInfo.orderType == OrderType.ESCROW) {
-            uint256 escrowFee = orderInfo.amount * defaultEscrowFee / 100000;
-            fee += escrowFee * 10 / 100;
-            escrowFees[orderInfo.seller] = escrowFees[orderInfo.seller] + escrowFee * 90 / 100;
+        if(order.orderType == OrderType.ESCROW) { 
+            escrowFee = order.amount * defaultEscrowFee / 100000;
+            escrowFees[order.seller][order.paymentToken] = escrowFees[order.seller][order.paymentToken] + escrowFee * 90 / 100;
         }
 
-        adminFees[orderInfo.paymentToken] = adminFees[orderInfo.paymentToken] + fee;
-        orderInfo.status = OrderStatus.ORDER_COMPLETED;
+        adminFees[order.paymentToken] = adminFees[order.paymentToken] + fee + escrowFee * 10 / 100;
+        order.status = OrderStatus.ORDER_COMPLETED;
 
-        if (orderInfo.paymentType == PaymentType.PAYMENT_ETH)
-            payable(orderInfo.seller).transfer(orderInfo.amount - fee);
+        if (order.paymentType == PaymentType.PAYMENT_ETH)
+            payable(order.seller).transfer(order.amount - fee + escrowFee * 90 / 100);
         else
-            IERC20(orderInfo.paymentToken).safeTransfer(orderInfo.seller, orderInfo.amount - fee);
+            IERC20(order.paymentToken).safeTransfer(order.seller, order.amount - fee + escrowFee * 90 / 100);
 
-        orderInfo.completedAt = uint128(block.timestamp);
-        emit OrderCompleted(id, orderInfo.buyer, orderInfo.seller, orderInfo.completedAt);
+        order.completedAt = uint128(block.timestamp);
+        emit OrderCompleted(id, order.buyer, order.seller, order.completedAt);
     }
 
     /**
@@ -202,29 +174,20 @@ contract GreyMarket is OwnableUpgradeable, ReentrancyGuardUpgradeable, GreyMarke
         Sig calldata sig
     ) external {
         require(validateWithdrawOrder(sig, id, buyer, seller, uint256(OrderStatus.ORDER_CANCELLED)), "withdrawOrder: invalid signature");
-        OrderInfo storage orderInfo = orders[id];
-        require(orderInfo.status == OrderStatus.ORDER_CREATED, "withdrawOrder: invalid status");
-        require(orderInfo.buyer == msg.sender && orderInfo.buyer == buyer, "withdrawOrder: invalid buyer");
-        require(orderInfo.seller == seller, "withdrawOrder: invalid seller info");
+        Order storage order = orders[id];
+        require(order.status == OrderStatus.ORDER_CREATED, "withdrawOrder: invalid status");
+        require(order.buyer == msg.sender && order.buyer == buyer, "withdrawOrder: invalid buyer");
+        require(order.seller == seller, "withdrawOrder: invalid seller info");
 
-        orderInfo.status = OrderStatus.ORDER_CANCELLED;
+        order.status = OrderStatus.ORDER_CANCELLED;
 
-        if (orderInfo.paymentType == PaymentType.PAYMENT_ETH)
-            payable(orderInfo.buyer).transfer(orderInfo.amount);
+        if (order.paymentType == PaymentType.PAYMENT_ETH)
+            payable(order.buyer).transfer(order.amount);
         else
-            IERC20(orderInfo.paymentToken).safeTransfer(orderInfo.buyer, orderInfo.amount);
+            IERC20(order.paymentToken).safeTransfer(order.buyer, order.amount);
 
-        uint256 remainingEscrowFees = escrowFees[orderInfo.seller];
-        if(remainingEscrowFees > 0) {
-            escrowFees[orderInfo.seller] = 0;
-            if (orderInfo.paymentType == PaymentType.PAYMENT_ETH)
-                payable(orderInfo.seller).transfer(remainingEscrowFees);
-            else
-                IERC20(orderInfo.paymentToken).safeTransfer(orderInfo.seller, remainingEscrowFees);
-        }
-            
-        orderInfo.cancelledAt = uint128(block.timestamp);
-        emit OrderCancelled(id, orderInfo.buyer, orderInfo.seller, orderInfo.cancelledAt);
+        order.cancelledAt = uint128(block.timestamp);
+        emit OrderCancelled(id, order.buyer, order.seller, order.cancelledAt);
     }
 
     /**
@@ -245,18 +208,18 @@ contract GreyMarket is OwnableUpgradeable, ReentrancyGuardUpgradeable, GreyMarke
     ) external {
         require(validateReleaseDisputedOrder(sigs, id, buyer, seller, uint256(OrderStatus.ORDER_DISPUTE), winner), "releaseDisputedOrder: invalid signature");
         require(buyer == winner || seller == winner, "releaseDisputedOrder: invalid winner");
-        OrderInfo storage orderInfo = orders[id];
-        require(orderInfo.status == OrderStatus.ORDER_CREATED, "releaseDisputedOrder: invalid status");
-        require(winner == msg.sender && orderInfo.buyer == buyer &&  orderInfo.seller == seller, "releaseDisputedOrder: invalid info");
+        Order storage order = orders[id];
+        require(order.status == OrderStatus.ORDER_CREATED, "releaseDisputedOrder: invalid status");
+        require(winner == msg.sender && order.buyer == buyer && order.seller == seller, "releaseDisputedOrder: invalid info");
 
-        orderInfo.status = OrderStatus.ORDER_DISPUTE_HANDLED;
-        if (orderInfo.paymentType == PaymentType.PAYMENT_ETH)
-            payable(winner).transfer(orderInfo.amount);
+        order.status = OrderStatus.ORDER_DISPUTE_HANDLED;
+        if (order.paymentType == PaymentType.PAYMENT_ETH)
+            payable(winner).transfer(order.amount);
         else
-            IERC20(orderInfo.paymentToken).safeTransfer(winner, orderInfo.amount);
+            IERC20(order.paymentToken).safeTransfer(winner, order.amount);
 
-        orderInfo.disputedAt = uint128(block.timestamp);
-        emit OrderDisputeHandled(id, orderInfo.buyer, orderInfo.seller, winner, orderInfo.disputedAt);
+        order.disputedAt = uint128(block.timestamp);
+        emit OrderDisputeHandled(id, order.buyer, order.seller, winner, order.disputedAt);
     }
 
     /**
@@ -365,18 +328,18 @@ contract GreyMarket is OwnableUpgradeable, ReentrancyGuardUpgradeable, GreyMarke
      * @param recipient The address that will receive the fees.
      */
     function _withdrawLockedFund(bytes32 id, address recipient) external onlyOwner {
-        OrderInfo storage orderInfo = orders[id];
-        require(orderInfo.status == OrderStatus.ORDER_CREATED, "invalid order status");
+        Order storage order = orders[id];
+        require(order.status == OrderStatus.ORDER_CREATED, "invalid order status");
         require(recipient != address(0), "invalid recipient address");
-        require(orderInfo.createdAt + escrowLockPeriod >= block.timestamp, "can not withdraw before lock period");
+        require(order.createdAt + escrowLockPeriod >= block.timestamp, "can not withdraw before lock period");
         
-        if (orderInfo.paymentToken == address(0))
-            payable(recipient).transfer(orderInfo.amount);
+        if (order.paymentToken == address(0))
+            payable(recipient).transfer(order.amount);
         else
-            IERC20(orderInfo.paymentToken).safeTransfer(recipient, orderInfo.amount);
+            IERC20(order.paymentToken).safeTransfer(recipient, order.amount);
 
-        orderInfo.status = OrderStatus.ORDER_ADMIN_WITHDRAWN;
-        emit WithdrawLockedFund(msg.sender, id, recipient, orderInfo.amount);
+        order.status = OrderStatus.ORDER_ADMIN_WITHDRAWN;
+        emit WithdrawLockedFund(msg.sender, id, recipient, order.amount);
     }
 
     /**
@@ -560,9 +523,9 @@ contract GreyMarket is OwnableUpgradeable, ReentrancyGuardUpgradeable, GreyMarke
      * @notice View function to get order info by ID
      * @dev Retrieves the order struct by ID
      * @param orderId Order ID
-     * @return OrderInfo Order struct
+     * @return Order Order struct
      */
-    function getOrderInfo(bytes32 orderId) public view returns (OrderInfo memory) {
+    function getOrderInfo(bytes32 orderId) public view returns (Order memory) {
         return orders[orderId];
     }
     
@@ -574,36 +537,5 @@ contract GreyMarket is OwnableUpgradeable, ReentrancyGuardUpgradeable, GreyMarke
      */
     function getAdminFeeAmount(address token) public view returns (uint256) {
         return adminFees[token];
-    }
-
-    /**
-     * @dev Internal pure function to retrieve the name of this contract as a
-     *      string that will be used to derive the name hash in the constructor.
-     * @return The name of this contract as a string.
-     */
-    function _nameString() public pure returns (string memory) {
-        return "GreyMarket";
-    }
-
-    /**
-     * @notice UUID V4 to bytes32 representation in Solidity
-     * @param s UUID V4 string
-     */
-    function UUIDStringToBytes32(string memory s) public pure returns (bytes32) {
-        bytes memory bytesArray = bytes(s);
-        bytes memory noDashes = new bytes(32);
-        uint index;
-        for (uint256 i; i < bytesArray.length; i++) {
-            if (bytesArray[i] == "-") {
-                continue;
-            }
-            noDashes[index] = bytesArray[i];
-            index++;
-        }
-        bytes32 result;
-        assembly {
-            result := mload(add(noDashes, 32))
-        }
-        return result;
     }
 }
