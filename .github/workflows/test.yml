@@ -16,6 +16,4 @@ jobs:
           version: nightly
 
       - name: Run tests
-        run: forge test -vvv        
-        env:
-          CELER_FUJI_ADDRESS: '0xE9533976C590200E32d95C53f06AE12d292cFc47'
+        run: forge test -vvv
