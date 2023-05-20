@@ -28,7 +28,5 @@ contract GreyMarketStorage {
 
     mapping(address => mapping(address => uint256)) public escrowFees;
 
-    mapping(bytes32 => Order) public orders;
-
     mapping(address => bool) public paymentTokens;
 }

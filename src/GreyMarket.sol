@@ -4,39 +4,41 @@ pragma solidity ^0.8.9;
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import "./GreyMarketStorage.sol";
 import "./GreyMarketEvent.sol";
 import "./GreyMarketData.sol";
 
+/// @dev Error thrown when the signature is invalid.
+error InvalidSignature(bytes32 orderId, Sig sig);
+/// @dev Error thrown when a set of signatures are invalid.
+error InvalidSignatures(bytes32 orderId, Sig[] sig);
+/// @dev Error thrown when the order is not found.
+error OrderNotFound(bytes32 orderId);
+/// @dev Error thrown when payment token is not supported.
+error PaymentTokenNotSupported(address paymentToken);
+/// @dev Error thrown when order status is invalid
+error InvalidOrderStatus(bytes32 orderId, uint8 status);
+/// @dev Error thrown when recipient is invalid
+error InvalidRecipient(address recipient);
+/// @dev Error thrown when order cannot be admin withdrawn yet
+error CannotAdminWithdrawYet(bytes32 orderId);
+
 /** 
  * @title gm.co
- * @custom:version 1.0
+ * @custom:version 1.1
  * @author projectPXN
  * @custom:coauthor bldr
  * @notice gm.co is a Business-to-Consumer (B2C) and Peer-to-Peer (P2P) marketplace
  *         using blockchain technology for proof of transactions and allow users
  *         to buy and sell real world goods using cryptocurrency.
  */
-contract GreyMarket is Ownable, ReentrancyGuard, GreyMarketStorage, GreyMarketEvent {
-    using SafeERC20 for IERC20;
-
-    bytes32 private domainSeperator;
-
-    constructor(address _proofSigner, address _usdc) {
+contract GreyMarket is Ownable, GreyMarketStorage, GreyMarketEvent, EIP712 {
+    constructor(address _proofSigner, address _usdc) EIP712("GreyMarket Contract", "1.1.0") {
         require(_usdc != address(0) && _proofSigner != address(0), "invalid token or signer address");
 
         proofSigner = _proofSigner;
         paymentTokens[_usdc] = true;
-
-        domainSeperator = keccak256(
-            abi.encode(
-                DOMAIN_TYPEHASH, 
-                keccak256(bytes(CONTRACT_NAME)), 
-                getChainId(), 
-                address(this)
-            )
-        );
     }
 
     /**
@@ -53,41 +55,24 @@ contract GreyMarket is Ownable, ReentrancyGuard, GreyMarketStorage, GreyMarketEv
         bytes32 id, 
         address seller, 
         address paymentToken,
-        OrderType orderType, 
+        uint8 orderType, 
         uint256 amount, 
         Sig calldata sig
     ) external payable {
-        require(validateCreateOrder(sig, id, msg.sender, seller, paymentToken, uint256(orderType), amount), "createOrder: invalid signature");
-        require(paymentToken == address(0) || paymentTokens[paymentToken], "createOrder: invalid payment token");
-        require(orderType < OrderType.COUNT, "createOrder: invalid order type");
-        Order storage order = orders[id];
-        require(order.status == OrderStatus.ORDER_NONE, "createOrder: invalid status");
+        if(!validateCreateOrder(sig, id, msg.sender, seller, paymentToken, orderType, amount))
+            revert InvalidSignature(id, sig);
 
-        order.id = id;
-        order.createdAt = uint128(block.timestamp);
-        order.buyer = msg.sender;
-        order.orderType = orderType;
-        order.seller = seller;
-        order.status = OrderStatus.ORDER_CREATED;
+        if(paymentToken != address(0))
+            IERC20(paymentToken).transferFrom(msg.sender, address(this), amount);
 
-        if (paymentToken == address(0)) {
-            order.amount = msg.value;
-            order.paymentType = PaymentType.PAYMENT_ETH;
-        } else {
-            IERC20(paymentToken).safeTransferFrom(msg.sender, address(this), amount);
-            order.amount = amount;
-            order.paymentType = PaymentType.PAYMENT_ERC20;
-        }
-
-        order.paymentToken = paymentToken;
         emit OrderCreated(
             id, 
-            order.buyer, 
+            msg.sender, 
             seller, 
-            uint8(order.paymentType), 
-            uint8(orderType), 
-            order.createdAt, 
-            order.amount
+            uint8(paymentToken == address(0) ? 0 : 1), 
+            orderType, 
+            uint128(block.timestamp), 
+            amount
         );
     }
 
@@ -97,97 +82,67 @@ contract GreyMarket is Ownable, ReentrancyGuard, GreyMarketStorage, GreyMarketEv
      * @param id Order id
      * @param buyer Address of the buyer
      * @param seller Address of the seller
+     * @param amount Amount of funds to claim
+     * @param paymentToken Token used to claim funds
+     * @param orderType Type of the order
      * @param sig ECDSA signature
      */
     function claimOrder(
         bytes32 id,
         address buyer,
         address seller,
+        uint256 amount,
+        uint8 orderType,
+        address paymentToken,
         Sig calldata sig
     ) public {
-        require(validateClaimOrder(sig, id, buyer, seller, uint256(OrderStatus.ORDER_DELIVERED)), "claimOrder: invalid signature");
-        Order storage order = orders[id];
-        require(order.status == OrderStatus.ORDER_CREATED, "claimOrder: invalid status");
-        require(order.seller == msg.sender && order.seller == seller, "claimOrder: invalid seller");
-        require(order.buyer == buyer, "claimOrder: invalid buyer info");
-        require(order.orderType < OrderType.COUNT, "claimOrder: invalid order type");
+        if(!validateClaimOrder(sig, id, buyer, seller, amount, paymentToken, orderType, 4))
+            revert InvalidSignature(id, sig);
 
-        uint256 fee = order.amount * transactionFee / 100000;
+        uint256 fee = amount * transactionFee / 100000;
         uint256 escrowFee;
 
-        if(order.orderType == OrderType.ESCROW) { 
-            escrowFee = order.amount * defaultEscrowFee / 100000;
-            escrowFees[order.seller][order.paymentToken] = escrowFees[order.seller][order.paymentToken] + escrowFee * 90 / 100;
+        if(orderType == 1) { 
+            escrowFee = amount * defaultEscrowFee / 100000;
+            escrowFees[seller][paymentToken] = escrowFees[seller][paymentToken] + escrowFee * 90 / 100;
         }
 
-        adminFees[order.paymentToken] = adminFees[order.paymentToken] + fee + escrowFee * 10 / 100;
-        order.status = OrderStatus.ORDER_COMPLETED;
-
-        if (order.paymentType == PaymentType.PAYMENT_ETH)
-            payable(order.seller).transfer(order.amount - fee + escrowFee * 90 / 100);
+        adminFees[paymentToken] = adminFees[paymentToken] + fee + escrowFee * 10 / 100;
+        if (paymentToken == address(0))
+            payable(seller).transfer(amount - fee + escrowFee * 90 / 100);
         else
-            IERC20(order.paymentToken).safeTransfer(order.seller, order.amount - fee + escrowFee * 90 / 100);
+            IERC20(paymentToken).transfer(seller, amount - fee + escrowFee * 90 / 100);
 
-        order.completedAt = uint128(block.timestamp);
-        emit OrderCompleted(id, order.buyer, order.seller, order.completedAt);
+        emit OrderCompleted(id, buyer, seller, uint128(block.timestamp));
     }
-
-    /**
-     * @notice Claim multiple orders.
-     * @dev Claim multiple orders.
-     * @param ids Order ids
-     * @param buyers The addresses of the buyers
-     * @param sellers The addresses of the sellers
-     * @param sigs Array of ECDSA signatures
-     */
-    function claimOrders(
-        bytes32[] calldata ids,
-        address[] calldata buyers,
-        address[] calldata sellers,
-        Sig[] calldata sigs
-    ) external {
-        require(sigs.length == ids.length, "invalid length");
-        require(sellers.length == buyers.length, "invalid length");
-
-        uint256 len = ids.length;
-        uint256 i;
-
-        unchecked {
-            do {
-               claimOrder(ids[i], buyers[i], sellers[i], sigs[i]);
-            } while(++i < len);
-        }
-    }
-
+    
     /**
      * @notice Withdraw funds for a buyer after an order is cancelled
      * @dev Withdraw the order fund with order data
      * @param id Order id
      * @param buyer Address of the buyer
      * @param seller Address of the seller
+     * @param paymentToken Address of the payment token used for the order
+     * @param amount Amount of funds to withdraw
      * @param sig ECDSA signature
      */
     function withdrawOrder(
         bytes32 id, 
         address buyer, 
         address seller, 
+        address paymentToken,
+        uint256 amount,
         Sig calldata sig
     ) external {
-        require(validateWithdrawOrder(sig, id, buyer, seller, uint256(OrderStatus.ORDER_CANCELLED)), "withdrawOrder: invalid signature");
-        Order storage order = orders[id];
-        require(order.status == OrderStatus.ORDER_CREATED, "withdrawOrder: invalid status");
-        require(order.buyer == msg.sender && order.buyer == buyer, "withdrawOrder: invalid buyer");
-        require(order.seller == seller, "withdrawOrder: invalid seller info");
+        if(!validateWithdrawOrder(sig, id, buyer, seller, paymentToken, amount, 6))
+            revert InvalidSignature(id, sig);
 
-        order.status = OrderStatus.ORDER_CANCELLED;
-
-        if (order.paymentType == PaymentType.PAYMENT_ETH)
-            payable(order.buyer).transfer(order.amount);
+        if (paymentToken == address(0))
+            payable(buyer).transfer(amount);
         else
-            IERC20(order.paymentToken).safeTransfer(order.buyer, order.amount);
+            IERC20(paymentToken).transfer(buyer, amount);
 
-        order.cancelledAt = uint128(block.timestamp);
-        emit OrderCancelled(id, order.buyer, order.seller, order.cancelledAt);
+        emit OrderCancelled(id, buyer, seller, uint128(block.timestamp));
     }
 
     /**
@@ -197,6 +152,8 @@ contract GreyMarket is Ownable, ReentrancyGuard, GreyMarketStorage, GreyMarketEv
      * @param buyer Address of the buyer
      * @param seller Address of the seller
      * @param winner Address of the winner
+     * @param paymentToken Token used to pay
+     * @param amount Amount of funds to release
      * @param sigs Array of the v,r,s values of the ECDSA signatures
      */
     function releaseDisputedOrder(
@@ -204,22 +161,19 @@ contract GreyMarket is Ownable, ReentrancyGuard, GreyMarketStorage, GreyMarketEv
         address buyer, 
         address seller, 
         address winner, 
+        uint256 amount,
+        address paymentToken,
         Sig[] calldata sigs
     ) external {
-        require(validateReleaseDisputedOrder(sigs, id, buyer, seller, uint256(OrderStatus.ORDER_DISPUTE), winner), "releaseDisputedOrder: invalid signature");
-        require(buyer == winner || seller == winner, "releaseDisputedOrder: invalid winner");
-        Order storage order = orders[id];
-        require(order.status == OrderStatus.ORDER_CREATED, "releaseDisputedOrder: invalid status");
-        require(winner == msg.sender && order.buyer == buyer && order.seller == seller, "releaseDisputedOrder: invalid info");
+        if(!validateReleaseDisputedOrder(sigs, id, buyer, seller, 8, paymentToken, winner))
+            revert InvalidSignatures(id, sigs);
 
-        order.status = OrderStatus.ORDER_DISPUTE_HANDLED;
-        if (order.paymentType == PaymentType.PAYMENT_ETH)
-            payable(winner).transfer(order.amount);
+        if (paymentToken == address(0))
+            payable(winner).transfer(amount);
         else
-            IERC20(order.paymentToken).safeTransfer(winner, order.amount);
+            IERC20(paymentToken).transfer(winner, amount);
 
-        order.disputedAt = uint128(block.timestamp);
-        emit OrderDisputeHandled(id, order.buyer, order.seller, winner, order.disputedAt);
+        emit OrderDisputeHandled(id, buyer, seller, winner, uint128(block.timestamp));
     }
 
     /**
@@ -227,7 +181,7 @@ contract GreyMarket is Ownable, ReentrancyGuard, GreyMarketStorage, GreyMarketEv
      * @dev Admin function to set the proof signer address.
      * @param newProofSigner The new proof signer.
      */
-    function _setProofSigner(address newProofSigner) external onlyOwner {
+    function setProofSigner(address newProofSigner) external onlyOwner {
         require(newProofSigner != address(0), "invalid proof signer");
         proofSigner = newProofSigner;
         emit NewProofSigner(proofSigner);
@@ -238,7 +192,7 @@ contract GreyMarket is Ownable, ReentrancyGuard, GreyMarketStorage, GreyMarketEv
      * @dev Admin function to add new market admin.
      * @param newAdmins The new admin.
      */
-    function _setNewAdmins(address[] calldata newAdmins) external onlyOwner {
+    function setNewAdmins(address[] calldata newAdmins) external onlyOwner {
         require(newAdmins.length > 0, "invalid admins length");
         admins = newAdmins;
         emit NewAdmins(admins);
@@ -250,7 +204,7 @@ contract GreyMarket is Ownable, ReentrancyGuard, GreyMarketStorage, GreyMarketEv
      * @param paymentToken Supported payment token
      * @param add Add or remove admin.
      */
-    function _addOrRemovePaymentToken(address paymentToken, bool add) external onlyOwner {
+    function addOrRemovePaymentToken(address paymentToken, bool add) external onlyOwner {
         require(paymentToken != address(0), "invalid payment token");
         paymentTokens[paymentToken] = add;
     }
@@ -260,7 +214,7 @@ contract GreyMarket is Ownable, ReentrancyGuard, GreyMarketStorage, GreyMarketEv
      * @dev Admin function to set the transaction fee
      * @param newFee escrow fee recipient.
      */
-     function _setTransactionFee(uint256 newFee) external onlyOwner {
+     function setTransactionFee(uint256 newFee) external onlyOwner {
         require(newFee <= MAX_TRANSACTION_FEE, "invalid fee range");
         transactionFee = newFee;
         emit NewTransactionFee(newFee);
@@ -271,7 +225,7 @@ contract GreyMarket is Ownable, ReentrancyGuard, GreyMarketStorage, GreyMarketEv
      * @dev Admin function to set the escrow fee.
      * @param newEscrowFee The new escrow fee, scaled by 1e18.
      */
-    function _setEscrowFee(uint256 newEscrowFee) external onlyOwner {
+    function setEscrowFee(uint256 newEscrowFee) external onlyOwner {
         require(newEscrowFee <= MAX_ESCROW_FEE, "invalid fee range");
         defaultEscrowFee = newEscrowFee;
         emit NewEscrowFee(newEscrowFee);
@@ -282,7 +236,7 @@ contract GreyMarket is Ownable, ReentrancyGuard, GreyMarketStorage, GreyMarketEv
      * @dev Admin function to set the escrow pending period.
      * @param newEscrowPendingPeriod The new escrow pending period in timestamp
      */
-    function _setEscrowPendingPeriod(uint256 newEscrowPendingPeriod) external onlyOwner {
+    function setEscrowPendingPeriod(uint256 newEscrowPendingPeriod) external onlyOwner {
         require(newEscrowPendingPeriod <= MAX_ESCROW_PENDING_PERIOD, "pending period must not exceed maximum period");
         require(newEscrowPendingPeriod >= MIN_ESCROW_PENDING_PERIOD, "pending period must exceed minimum period");
         escrowPendingPeriod = newEscrowPendingPeriod;
@@ -294,7 +248,7 @@ contract GreyMarket is Ownable, ReentrancyGuard, GreyMarketStorage, GreyMarketEv
      * @dev Admin function to set the escrow lock period.
      * @param newEscrowLockPeriod The new escrow lock period in timestamp
      */
-    function _setEscrowLockPeriod(uint256 newEscrowLockPeriod) external onlyOwner {
+    function setEscrowLockPeriod(uint256 newEscrowLockPeriod) external onlyOwner {
         require(newEscrowLockPeriod <= MAX_ESCROW_LOCK_PERIOD, "lock period must not exceed maximum period");
         require(newEscrowLockPeriod >= MIN_ESCROW_LOCK_PERIOD, "lock period must exceed minimum period");
         escrowLockPeriod = newEscrowLockPeriod;
@@ -308,14 +262,14 @@ contract GreyMarket is Ownable, ReentrancyGuard, GreyMarketStorage, GreyMarketEv
      * @param token The token address to withdraw, NULL for ETH, token address for ERC20.
      * @param amount The amount to withdraw.
      */
-    function _withdrawAdminFee(address recipient, address token, uint256 amount) external onlyOwner {
+    function withdrawAdminFee(address recipient, address token, uint256 amount) external onlyOwner {
         require(recipient != address(0), "invalid recipient address");
         require(adminFees[token] >= amount, "invalid token address or amount");
 
         if (token == address(0))
             payable(recipient).transfer(amount);
         else
-            IERC20(token).safeTransfer(recipient, amount);
+            IERC20(token).transfer(recipient, amount);
 
         adminFees[token] = adminFees[token] - amount;
         emit WithdrawAdminFee(msg.sender, recipient, token, amount);
@@ -326,31 +280,34 @@ contract GreyMarket is Ownable, ReentrancyGuard, GreyMarketStorage, GreyMarketEv
      * @dev Admin function to withdraw the unclaimed fund for lock period.
      * @param id The order id.
      * @param recipient The address that will receive the fees.
+     * @param orderStatus Status of the order
+     * @param createdAt Timestamp of when the order was created
+     * @param amount Amount to withdraw
+     * @param paymentToken Address of the payment token
      */
-    function _withdrawLockedFund(bytes32 id, address recipient) external onlyOwner {
-        Order storage order = orders[id];
-        require(order.status == OrderStatus.ORDER_CREATED, "invalid order status");
-        require(recipient != address(0), "invalid recipient address");
-        require(order.createdAt + escrowLockPeriod >= block.timestamp, "can not withdraw before lock period");
+    function withdrawLockedFunds(
+        bytes32 id, 
+        address recipient, 
+        uint8 orderStatus,
+        uint256 createdAt,
+        uint256 amount,
+        address paymentToken
+    ) external onlyOwner {
+        if(orderStatus == 1)
+            revert InvalidOrderStatus(id, orderStatus);
+
+        if(recipient == address(0))
+            revert InvalidRecipient(recipient);
+
+        if(createdAt + escrowLockPeriod <= block.timestamp)
+            revert CannotAdminWithdrawYet(id);
         
-        if (order.paymentToken == address(0))
-            payable(recipient).transfer(order.amount);
+        if (paymentToken == address(0))
+            payable(recipient).transfer(amount);
         else
-            IERC20(order.paymentToken).safeTransfer(recipient, order.amount);
+            IERC20(paymentToken).transfer(recipient, amount);
 
-        order.status = OrderStatus.ORDER_ADMIN_WITHDRAWN;
-        emit WithdrawLockedFund(msg.sender, id, recipient, order.amount);
-    }
-
-    /**
-     * @notice Retrieve the chain ID the contract is deployed to
-     * @dev Retrieve the chain ID from the EVM
-     * @return chainId chain ID
-     */
-    function getChainId() internal view returns (uint) {
-        uint chainId;
-        assembly { chainId := chainid() }
-        return chainId;
+        emit WithdrawLockedFund(msg.sender, id, recipient, amount);
     }
 
     /**
@@ -371,28 +328,20 @@ contract GreyMarket is Ownable, ReentrancyGuard, GreyMarketStorage, GreyMarketEv
         address buyer, 
         address seller, 
         address paymentToken, 
-        uint256 orderType, 
+        uint8 orderType, 
         uint256 amount
     ) internal view returns(bool) {
-        bytes32 digest = keccak256(
-            abi.encodePacked(
-                "\x19\x01",
-                domainSeperator,
-                keccak256(
-                    abi.encode(
-                        CREATE_ORDER_TYPEHASH,
-                        id,
-                        buyer,
-                        seller,
-                        paymentToken,
-                        orderType,
-                        amount
-                    )
-                )
-            )
-        );
+        bytes32 digest = _hashTypedDataV4(keccak256(abi.encode(
+                CREATE_ORDER_TYPEHASH,
+                id,
+                buyer,
+                seller,
+                paymentToken,
+                orderType,
+                amount
+        )));
 
-        return ecrecover(digest, sig.v, sig.r, sig.s) == proofSigner;
+        return ECDSA.recover(digest, sig.v, sig.r, sig.s) == proofSigner;
     }
 
     /**
@@ -402,7 +351,10 @@ contract GreyMarket is Ownable, ReentrancyGuard, GreyMarketStorage, GreyMarketEv
      * @param id Order id
      * @param buyer Buyer address
      * @param seller Seller address
+     * @param amount Amount of funds to claim
+     * @param paymentToken Payment token address
      * @param orderStatus Order status in integer value
+     * @param orderType Order type
      * @return bool Whether the signature is valid or not
      */
     function validateClaimOrder(
@@ -410,25 +362,23 @@ contract GreyMarket is Ownable, ReentrancyGuard, GreyMarketStorage, GreyMarketEv
         bytes32 id, 
         address buyer, 
         address seller, 
-        uint256 orderStatus
+        uint256 amount,
+        address paymentToken,
+        uint8 orderType,
+        uint8 orderStatus
     ) internal view returns(bool) {
-        bytes32 digest = keccak256(
-            abi.encodePacked(
-                "\x19\x01",
-                domainSeperator,
-                keccak256(
-                    abi.encode(
-                        CLAIM_ORDER_TYPEHASH,
-                        id,
-                        buyer,
-                        seller,
-                        orderStatus
-                    )
-                )
-            )
-        );
+        bytes32 digest = _hashTypedDataV4(keccak256(abi.encode(
+                CLAIM_ORDER_TYPEHASH,
+                id,
+                buyer,
+                seller,
+                amount,
+                paymentToken,
+                orderType,
+                orderStatus
+        )));
         
-        return ecrecover(digest, sig.v, sig.r, sig.s) == proofSigner;
+        return ECDSA.recover(digest, sig.v, sig.r, sig.s) == proofSigner;
     }
 
     /**
@@ -438,6 +388,7 @@ contract GreyMarket is Ownable, ReentrancyGuard, GreyMarketStorage, GreyMarketEv
      * @param id Order id
      * @param buyer Buyer address
      * @param seller Seller address
+     * @param paymentToken Token used to pay
      * @param orderStatus Order status in integer value
      * @return bool Whether the signature is valid or not
      */
@@ -446,25 +397,21 @@ contract GreyMarket is Ownable, ReentrancyGuard, GreyMarketStorage, GreyMarketEv
         bytes32 id, 
         address buyer, 
         address seller, 
-        uint256 orderStatus
+        address paymentToken,
+        uint256 amount,
+        uint8 orderStatus
     ) internal view returns(bool) {
-        bytes32 digest = keccak256(
-            abi.encodePacked(
-                "\x19\x01",
-                domainSeperator,
-                keccak256(
-                    abi.encode(
-                        WITHDRAW_ORDER_TYPEHASH,
-                        id,
-                        buyer,
-                        seller,
-                        orderStatus
-                    )
-                )
-            )
-        );
-
-        return ecrecover(digest, sig.v, sig.r, sig.s) == proofSigner;
+        bytes32 digest = _hashTypedDataV4(keccak256(abi.encode(
+                WITHDRAW_ORDER_TYPEHASH,
+                id,
+                buyer,
+                seller,
+                paymentToken,
+                amount,
+                orderStatus
+        )));
+        
+        return ECDSA.recover(digest, sig.v, sig.r, sig.s) == proofSigner;
     }
 
     /**
@@ -475,6 +422,7 @@ contract GreyMarket is Ownable, ReentrancyGuard, GreyMarketStorage, GreyMarketEv
      * @param buyer Buyer address
      * @param seller Seller address
      * @param orderStatus Order status in integer value
+     * @param paymentToken Token used to pay
      * @param winner Winner address
      * @return bool Whether the signature is valid or not
      */
@@ -483,30 +431,24 @@ contract GreyMarket is Ownable, ReentrancyGuard, GreyMarketStorage, GreyMarketEv
         bytes32 id,
         address buyer,
         address seller,
-        uint256 orderStatus,
+        uint8 orderStatus,
+        address paymentToken,
         address winner
     ) internal view returns(bool) {
         require(sigs.length == REQUIRED_SIGNATURE_COUNT, "invalid signature required count");
 
-        bytes32 digest = keccak256(
-            abi.encodePacked(
-                "\x19\x01",
-                domainSeperator,
-                keccak256(
-                    abi.encode(
-                        RELEASE_DISPUTED_ORDER_TYPEHASH,
-                        id,
-                        buyer,
-                        seller,
-                        orderStatus,
-                        winner
-                    )
-                )
-            )
-        );
+        bytes32 digest = _hashTypedDataV4(keccak256(abi.encode(
+                RELEASE_DISPUTED_ORDER_TYPEHASH,
+                id,
+                buyer,
+                seller,
+                paymentToken,
+                winner,
+                orderStatus
+        )));
         
-        address signerOne = ecrecover(digest, sigs[0].v, sigs[0].r, sigs[0].s);
-        address signerTwo = ecrecover(digest, sigs[1].v, sigs[1].r, sigs[1].s);
+        address signerOne = ECDSA.recover(digest, sigs[0].v, sigs[0].r, sigs[0].s);
+        address signerTwo = ECDSA.recover(digest, sigs[1].v, sigs[1].r, sigs[1].s);
         require(signerOne != signerTwo, "same signature");
 
         uint256 validSignatureCount;
@@ -518,16 +460,6 @@ contract GreyMarket is Ownable, ReentrancyGuard, GreyMarketStorage, GreyMarketEv
 
         return validSignatureCount == REQUIRED_SIGNATURE_COUNT;
     }
-
-    /**
-     * @notice View function to get order info by ID
-     * @dev Retrieves the order struct by ID
-     * @param orderId Order ID
-     * @return Order Order struct
-     */
-    function getOrderInfo(bytes32 orderId) public view returns (Order memory) {
-        return orders[orderId];
-    }
     
     /**
      * @notice View function to get the amount of admin fees by a specific token
@@ -537,5 +469,12 @@ contract GreyMarket is Ownable, ReentrancyGuard, GreyMarketStorage, GreyMarketEv
      */
     function getAdminFeeAmount(address token) public view returns (uint256) {
         return adminFees[token];
+    }
+
+    /**
+     * @notice Expose typed v4 hash function
+     */
+    function hash(bytes32 _hash) public view returns (bytes32) {
+        return _hashTypedDataV4(_hash);
     }
 }

@@ -5,6 +5,7 @@ import "forge-std/Test.sol";
 import "../src/GreyMarket.sol";
 import "../src/MockERC20.sol";
 import "./Utils/Utilities.sol";
+import "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 
 contract BaseSetup is Test {
     Utilities internal utils;
@@ -20,8 +21,6 @@ contract BaseSetup is Test {
     uint256 internal signerPrivateKey;
     address internal signer2;
     uint256 internal signerPrivateKey2;
-
-    bytes32 public domainSeparator;
 
     function setUp() public virtual {
         // generate fake users
@@ -43,100 +42,65 @@ contract BaseSetup is Test {
         vm.startPrank(owner);
         greyMarket = new GreyMarket(signer, address(mockERC20));
         vm.stopPrank();
-
-        domainSeparator = keccak256(
-            abi.encode(
-                DOMAIN_TYPEHASH, 
-                keccak256(bytes(CONTRACT_NAME)), 
-                31337, 
-                address(greyMarket)
-            )
-        );
     }
 
     function randomOrderID() public view returns (bytes32) {
         return keccak256(abi.encodePacked(block.timestamp, block.difficulty));
     }
 
-    function generateOrderDigest(bytes32 orderId, OrderType orderType, address paymentToken) public view returns(bytes32) {
-        bytes32 digest = keccak256(
-            abi.encodePacked(
-                "\x19\x01",
-                domainSeparator,
-                keccak256(
-                    abi.encode(
-                        CREATE_ORDER_TYPEHASH,
-                        orderId,
-                        buyer,
-                        seller,
-                        paymentToken,
-                        orderType,
-                        1000000
-                    )
-                )
-            )
-        );
+    function generateOrderDigest(bytes32 orderId, uint8 orderType, address paymentToken) public view returns(bytes32) {
+        bytes32 digest = greyMarket.hash(keccak256(abi.encode(
+                CREATE_ORDER_TYPEHASH,
+                orderId,
+                buyer,
+                seller,
+                paymentToken,
+                orderType,
+                1000000
+        )));
 
         return digest;
     }
 
-    function generateOrderClaimDigest(bytes32 orderId) public view returns(bytes32) {
-        bytes32 digest = keccak256(
-            abi.encodePacked(
-                "\x19\x01",
-                domainSeparator,
-                keccak256(
-                    abi.encode(
-                        CLAIM_ORDER_TYPEHASH,
-                        orderId,
-                        buyer,
-                        seller,
-                        OrderStatus.ORDER_DELIVERED
-                    )
-                )
-            )
-        );
+    function generateOrderClaimDigest(bytes32 orderId, uint256 amount, address paymentToken, uint8 orderType) public view returns(bytes32) {
+        bytes32 digest = greyMarket.hash(keccak256(abi.encode(
+                CLAIM_ORDER_TYPEHASH,
+                orderId,
+                buyer,
+                seller,
+                amount,
+                paymentToken,
+                orderType,
+                4
+        )));
 
         return digest;
     }
 
-    function generateWithdrawDigest(bytes32 orderId) public view returns(bytes32) {
-        bytes32 digest = keccak256(
-            abi.encodePacked(
-                "\x19\x01",
-                domainSeparator,
-                keccak256(
-                    abi.encode(
-                        WITHDRAW_ORDER_TYPEHASH,
-                        orderId,
-                        buyer,
-                        seller,
-                        OrderStatus.ORDER_CANCELLED
-                    )
-                )
-            )
-        );
+    function generateWithdrawDigest(bytes32 orderId, uint256 amount, address paymentToken) public view returns(bytes32) {
+        bytes32 digest = greyMarket.hash(keccak256(abi.encode(
+                WITHDRAW_ORDER_TYPEHASH,
+                orderId,
+                buyer,
+                seller,
+                paymentToken,
+                amount,
+                6
+        )));
 
         return digest;
     }
 
-    function generateDisputeDigest(bytes32 orderId, address winner) public view returns(bytes32) {
-        bytes32 digest = keccak256(
-            abi.encodePacked(
-                "\x19\x01",
-                domainSeparator,
-                keccak256(
-                    abi.encode(
-                        RELEASE_DISPUTED_ORDER_TYPEHASH,
-                        orderId,
-                        buyer,
-                        seller,
-                        OrderStatus.ORDER_DISPUTE,
-                        winner
-                    )
-                )
-            )
-        );
+    function generateDisputeDigest(bytes32 orderId, address winner, address paymentToken) public view returns(bytes32) {
+        bytes32 digest = greyMarket.hash(keccak256(abi.encode(
+                RELEASE_DISPUTED_ORDER_TYPEHASH,
+                orderId,
+                buyer,
+                seller,
+                paymentToken,
+                winner,
+                8
+        )));
 
         return digest;
     }

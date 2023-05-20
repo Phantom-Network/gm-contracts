@@ -14,7 +14,7 @@ contract Orders is BaseSetup {
 
     function testWithdrawDirectOrder() public {
         bytes32 orderId = randomOrderID();
-        bytes32 digest = generateOrderDigest(orderId, OrderType.DIRECT, address(0));
+        bytes32 digest = generateOrderDigest(orderId, 0, address(0));
 
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPrivateKey, digest);
         
@@ -23,14 +23,14 @@ contract Orders is BaseSetup {
             orderId, 
             seller, 
             address(0), 
-            OrderType.DIRECT, 
+            0, 
             1000000, 
             Sig(v, r, s)
         );
 
         uint256 buyerBalanceBefore = address(buyer).balance;
 
-        digest = generateWithdrawDigest(orderId);
+        digest = generateWithdrawDigest(orderId, 1000000, address(0));
 
         (v, r, s) = vm.sign(signerPrivateKey, digest);
 
@@ -38,19 +38,18 @@ contract Orders is BaseSetup {
         greyMarket.withdrawOrder(
             orderId, 
             buyer, 
-            seller, 
+            seller,
+            address(0),
+            1000000, 
             Sig(v, r, s)
         );
 
-        Order memory order = greyMarket.getOrderInfo(orderId);
-
-        assertEq(uint256(order.status), uint256(OrderStatus.ORDER_CANCELLED));
         assertEq(address(buyer).balance, buyerBalanceBefore + 1000000);
     }
 
     function testWithdrawEscrowOrder() public {
         bytes32 orderId = randomOrderID();
-        bytes32 digest = generateOrderDigest(orderId, OrderType.ESCROW, address(0));
+        bytes32 digest = generateOrderDigest(orderId, 1, address(0));
 
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPrivateKey, digest);
         
@@ -59,14 +58,14 @@ contract Orders is BaseSetup {
             orderId, 
             seller, 
             address(0), 
-            OrderType.ESCROW, 
+            1, 
             1000000, 
             Sig(v, r, s)
         );
 
         uint256 buyerBalanceBefore = address(buyer).balance;
 
-        digest = generateWithdrawDigest(orderId);
+        digest = generateWithdrawDigest(orderId, 1000000, address(0));
 
         (v, r, s) = vm.sign(signerPrivateKey, digest);
 
@@ -74,19 +73,18 @@ contract Orders is BaseSetup {
         greyMarket.withdrawOrder(
             orderId, 
             buyer, 
-            seller, 
+            seller,
+            address(0),
+            1000000,
             Sig(v, r, s)
         );
 
-        Order memory order = greyMarket.getOrderInfo(orderId);
-
-        assertEq(uint256(order.status), uint256(OrderStatus.ORDER_CANCELLED));
         assertEq(address(buyer).balance, buyerBalanceBefore + 1000000);
     }
 
     function testWithdrawERC20DirectOrder() public {
         bytes32 orderId = randomOrderID();
-        bytes32 digest = generateOrderDigest(orderId, OrderType.DIRECT, address(mockERC20));
+        bytes32 digest = generateOrderDigest(orderId, 0, address(mockERC20));
 
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPrivateKey, digest);
         
@@ -96,7 +94,7 @@ contract Orders is BaseSetup {
             orderId, 
             seller,
             address(mockERC20), 
-            OrderType.DIRECT, 
+            0, 
             1000000, 
             Sig(v, r, s)
         );
@@ -104,7 +102,7 @@ contract Orders is BaseSetup {
 
         uint256 buyerBalanceBefore = mockERC20.balanceOf(buyer);
 
-        digest = generateWithdrawDigest(orderId);
+        digest = generateWithdrawDigest(orderId, 1000000, address(mockERC20));
 
         (v, r, s) = vm.sign(signerPrivateKey, digest);
 
@@ -112,19 +110,18 @@ contract Orders is BaseSetup {
         greyMarket.withdrawOrder(
             orderId, 
             buyer, 
-            seller, 
+            seller,
+            address(mockERC20),
+            1000000,
             Sig(v, r, s)
         );
 
-        Order memory order = greyMarket.getOrderInfo(orderId);
-
-        assertEq(uint256(order.status), uint256(OrderStatus.ORDER_CANCELLED));
         assertEq(mockERC20.balanceOf(buyer), buyerBalanceBefore + 1000000);
     }
 
     function testWithdrawERC20EscrowOrder() public {
         bytes32 orderId = randomOrderID();
-        bytes32 digest = generateOrderDigest(orderId, OrderType.ESCROW, address(mockERC20));
+        bytes32 digest = generateOrderDigest(orderId, 1, address(mockERC20));
 
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPrivateKey, digest);
         
@@ -134,7 +131,7 @@ contract Orders is BaseSetup {
             orderId, 
             seller, 
             address(mockERC20), 
-            OrderType.ESCROW, 
+            1, 
             1000000, 
             Sig(v, r, s)
         );
@@ -142,7 +139,7 @@ contract Orders is BaseSetup {
 
         uint256 buyerBalanceBefore = mockERC20.balanceOf(buyer);
 
-        digest = generateWithdrawDigest(orderId);
+        digest = generateWithdrawDigest(orderId, 1000000, address(mockERC20));
 
         (v, r, s) = vm.sign(signerPrivateKey, digest);
 
@@ -150,19 +147,18 @@ contract Orders is BaseSetup {
         greyMarket.withdrawOrder(
             orderId, 
             buyer, 
-            seller, 
+            seller,
+            address(mockERC20),
+            1000000,
             Sig(v, r, s)
         );
 
-        Order memory order = greyMarket.getOrderInfo(orderId);
-
-        assertEq(uint256(order.status), uint256(OrderStatus.ORDER_CANCELLED));
         assertEq(mockERC20.balanceOf(buyer), buyerBalanceBefore + 1000000);
     }
 
     function testWithdrawDirectOrderWithInvalidSignature() public {
         bytes32 orderId = randomOrderID();
-        bytes32 digest = generateOrderDigest(orderId, OrderType.DIRECT, address(0));
+        bytes32 digest = generateOrderDigest(orderId, 0, address(0));
 
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPrivateKey, digest);
         
@@ -171,22 +167,24 @@ contract Orders is BaseSetup {
             orderId, 
             seller, 
             address(0), 
-            OrderType.DIRECT, 
+            0, 
             1000000, 
             Sig(v, r, s)
         );
 
         vm.warp(1000);
-        digest = generateWithdrawDigest(randomOrderID());
+        digest = generateWithdrawDigest(randomOrderID(), 1000000, address(0));
 
         (v, r, s) = vm.sign(signerPrivateKey, digest);
 
         vm.prank(buyer);
-        vm.expectRevert("withdrawOrder: invalid signature");
+        vm.expectRevert();
         greyMarket.withdrawOrder(
             orderId, 
             buyer, 
-            seller, 
+            seller,
+            address(0),
+            1000000, 
             Sig(v, r, s)
         );
     }

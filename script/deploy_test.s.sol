@@ -14,8 +14,7 @@ contract Deploy is Script {
         deployer = vm.envAddress("DEPLOYER_ADDRESS");
         vm.startBroadcast(deployer);
 
-        MockERC20 usdc = new MockERC20(deployer);
-        GreyMarket gm = new GreyMarket(vm.envAddress("PROOF_SIGNER"), address(usdc));
+        GreyMarket gm = new GreyMarket(vm.envAddress("PROOF_SIGNER"), address(0xCd000DF47446cfd7D660aDEb4021B710AA41DeD9));
         console.log("Grey Market contract deployed at address: ", address(gm));
         
         vm.stopBroadcast();
