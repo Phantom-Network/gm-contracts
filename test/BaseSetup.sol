@@ -62,7 +62,7 @@ contract BaseSetup is Test {
         return digest;
     }
 
-    function generateOrderClaimDigest(bytes32 orderId, uint256 amount, address paymentToken, uint8 orderType) public view returns(bytes32) {
+    function generateOrderClaimDigest(bytes32 orderId, uint256 amount, address paymentToken, uint8 orderType, uint256 nonce) public view returns(bytes32) {
         bytes32 digest = greyMarket.hash(keccak256(abi.encode(
                 CLAIM_ORDER_TYPEHASH,
                 orderId,
@@ -71,13 +71,14 @@ contract BaseSetup is Test {
                 amount,
                 paymentToken,
                 orderType,
-                4
+                4,
+                nonce
         )));
 
         return digest;
     }
 
-    function generateWithdrawDigest(bytes32 orderId, uint256 amount, address paymentToken) public view returns(bytes32) {
+    function generateWithdrawDigest(bytes32 orderId, uint256 amount, address paymentToken, uint256 nonce) public view returns(bytes32) {
         bytes32 digest = greyMarket.hash(keccak256(abi.encode(
                 WITHDRAW_ORDER_TYPEHASH,
                 orderId,
@@ -85,7 +86,8 @@ contract BaseSetup is Test {
                 seller,
                 paymentToken,
                 amount,
-                6
+                6,
+                nonce
         )));
 
         return digest;

@@ -29,7 +29,7 @@ contract Orders is BaseSetup {
         );
 
         uint256 sellerBalanceBefore = address(seller).balance;
-        digest = generateOrderClaimDigest(orderId, 1000000, address(0), 1);
+        digest = generateOrderClaimDigest(orderId, 1000000, address(0), 1, greyMarket.usedNonces(seller));
         (v, r, s) = vm.sign(signerPrivateKey, digest);
 
         vm.prank(seller);
@@ -45,12 +45,8 @@ contract Orders is BaseSetup {
 
         uint256 defaultOrderFee = 1000000 * greyMarket.transactionFee() / 100000;
         uint256 escrowFee = 1000000 * greyMarket.defaultEscrowFee() / 100000;
-        uint256 pxnEscrowFee = escrowFee * 10 / 100;
         uint256 sellerEscrowFee = escrowFee * 90 / 100;
-
-        assertEq(greyMarket.getAdminFeeAmount(address(0)), defaultOrderFee + pxnEscrowFee);
         assertEq(address(seller).balance, sellerBalanceBefore + 1000000 - defaultOrderFee + sellerEscrowFee);
-        assertEq(greyMarket.escrowFees(address(seller), address(0)), sellerEscrowFee);
     }
 
     function testClaimIfSellerIsNotSeller() public {
@@ -69,7 +65,7 @@ contract Orders is BaseSetup {
             Sig(v, r, s)
         );
 
-        digest = generateOrderClaimDigest(orderId, 100000, address(0), 1);
+        digest = generateOrderClaimDigest(orderId, 100000, address(0), 1,greyMarket.usedNonces(seller));
         (v, r, s) = vm.sign(signerPrivateKey, digest);
         
         vm.prank(buyer);

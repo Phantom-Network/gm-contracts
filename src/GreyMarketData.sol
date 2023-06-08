@@ -25,36 +25,6 @@ bytes32 constant RELEASE_DISPUTED_ORDER_TYPEHASH =
 
 uint256 constant MAX_TRANSACTION_FEE = 10000;
 uint256 constant MAX_ESCROW_FEE = 5000;
-uint256 constant MAX_ESCROW_PENDING_PERIOD = 6 * 30 days;
-uint256 constant MIN_ESCROW_PENDING_PERIOD = 7 days;
-uint256 constant REQUIRED_SIGNATURE_COUNT = 2;
-uint256 constant MAX_ESCROW_LOCK_PERIOD = 12 * 30 days;
-uint256 constant MIN_ESCROW_LOCK_PERIOD = 6 * 30 days;
-
-/*enum OrderType {
-    DIRECT == 0
-    ESCROW == 1
-}*/
-
-
-/*enum PaymentType {
-    PAYMENT_ETH,
-    PAYMENT_ERC20
-}*/
-
-/*enum OrderStatus {
-    ORDER_NONE, // 0
-    ORDER_CREATED, // 1
-    ORDER_PENDING, // 2
-    ORDER_TRANSIT, // 3
-    ORDER_DELIVERED, // 4
-    ORDER_COMPLETED, // 5
-    ORDER_CANCELLED, // 6
-    ORDER_DISPUTE, // 7
-    ORDER_DISPUTE_HANDLED, // 8
-    ORDER_ADMIN_WITHDRAWN // 9
-}*/
-
 struct Sig {
     uint8 v;
     bytes32 r;

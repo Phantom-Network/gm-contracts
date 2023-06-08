@@ -18,19 +18,12 @@ contract GreyMarketEvent {
 
     event OrderCompleted(bytes32 id, address indexed buyer, address indexed seller, uint256 blockTimestamp);
 
-    event OrderDisputeHandled(bytes32 id, address indexed buyer, address indexed seller, address winner, uint256 blockTimestamp);
 
-    event NewEscrowFee(uint256 newEscrowFee);
 
-    event NewEscrowPendingPeriod(uint256 newEscrowPendingPeriod);
 
-    event NewEscrowLockPeriod(uint256 newEscrowLockPeriod);
 
-    event NewAdmins(address[] newAdmins);
 
     event WithdrawAdminFee(address caller, address recipient, address token, uint256 amount);
-
-    event WithdrawLockedFund(address caller, bytes32 orderId, address recipient, uint256 amount);
 
     event NewTransactionFee(uint256 newTransactionFee);
 }

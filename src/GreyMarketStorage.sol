@@ -13,20 +13,7 @@ import "./GreyMarketData.sol";
  */
 contract GreyMarketStorage {
     address public proofSigner;
-
-    address[] public admins;
-
     uint256 public transactionFee = 5000;
-
     uint256 public defaultEscrowFee = 2900;
-
-    uint256 public escrowPendingPeriod;
-
-    uint256 public escrowLockPeriod;
-
-    mapping(address => uint256) public adminFees;
-
-    mapping(address => mapping(address => uint256)) public escrowFees;
-
-    mapping(address => bool) public paymentTokens;
+    mapping(address => uint256) public usedNonces;
 }
