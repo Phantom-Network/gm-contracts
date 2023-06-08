@@ -33,8 +33,7 @@ contract Orders is BaseSetup {
         digest = generateWithdrawDigest(
             orderId,
             1000000,
-            address(0),
-            greyMarket.usedNonces(buyer)
+            address(0)
         );
 
         (v, r, s) = vm.sign(signerPrivateKey, digest);
@@ -73,8 +72,7 @@ contract Orders is BaseSetup {
         digest = generateWithdrawDigest(
             orderId,
             1000000,
-            address(0),
-            greyMarket.usedNonces(buyer)
+            address(0)
         );
 
         (v, r, s) = vm.sign(signerPrivateKey, digest);
@@ -115,8 +113,7 @@ contract Orders is BaseSetup {
         digest = generateWithdrawDigest(
             orderId,
             1000000,
-            address(mockERC20),
-            greyMarket.usedNonces(buyer)
+            address(mockERC20)
         );
 
         (v, r, s) = vm.sign(signerPrivateKey, digest);
@@ -157,8 +154,7 @@ contract Orders is BaseSetup {
         digest = generateWithdrawDigest(
             orderId,
             1000000,
-            address(mockERC20),
-            greyMarket.usedNonces(buyer)
+            address(mockERC20)
         );
 
         (v, r, s) = vm.sign(signerPrivateKey, digest);
@@ -196,8 +192,7 @@ contract Orders is BaseSetup {
         digest = generateWithdrawDigest(
             randomOrderID(),
             1000000,
-            address(0),
-            greyMarket.usedNonces(buyer)
+            address(0)
         );
 
         (v, r, s) = vm.sign(signerPrivateKey, digest);
@@ -233,8 +228,7 @@ contract Orders is BaseSetup {
         digest = generateWithdrawDigest(
             orderId,
             250000,
-            address(0),
-            greyMarket.usedNonces(buyer)
+            address(0)
         );
 
         (v, r, s) = vm.sign(signerPrivateKey, digest);

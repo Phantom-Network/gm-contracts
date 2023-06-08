@@ -15,5 +15,5 @@ contract GreyMarketStorage {
     address public proofSigner;
     uint256 public transactionFee = 5000;
     uint256 public defaultEscrowFee = 2900;
-    mapping(address => uint256) public usedNonces;
+    mapping(bytes32 => bool) public orders;
 }

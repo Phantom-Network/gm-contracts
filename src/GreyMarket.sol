@@ -82,10 +82,9 @@ contract GreyMarket is Ownable, GreyMarketStorage, GreyMarketEvent, EIP712 {
         address paymentToken,
         Sig calldata sig
     ) public {
-        uint256 nonce = usedNonces[seller];
-        if(!validateClaimOrder(sig, id, buyer, seller, amount, paymentToken, orderType, 4, nonce))
+        if(orders[id] || !validateClaimOrder(sig, id, buyer, seller, amount, paymentToken, orderType))
             revert InvalidSignature(id, sig);
-        usedNonces[seller] = nonce + 1;
+        orders[id] = true;
 
         uint256 fee = amount * transactionFee / 100000;
         uint256 escrowFee;
@@ -98,6 +97,36 @@ contract GreyMarket is Ownable, GreyMarketStorage, GreyMarketEvent, EIP712 {
             IERC20(paymentToken).transfer(seller, amount - fee + escrowFee * 90 / 100);
 
         emit OrderCompleted(id, buyer, seller, uint128(block.timestamp));
+    }
+
+
+    /**
+     * @notice Claim multiple orders.
+     * @dev Claim multiple orders.
+     * @param ids Order ids
+     * @param buyers The addresses of the buyers
+     * @param sellers The addresses of the sellers
+     * @param amounts Amount of funds to claim
+     * @param paymentTokens Token used to claim funds
+     * @param sigs Array of ECDSA signatures
+     */
+    function claimOrders(
+        bytes32[] calldata ids,
+        address[] calldata buyers,
+        address[] calldata sellers,
+        uint256[] calldata amounts,
+        address[] calldata paymentTokens,
+        Sig[] calldata sigs
+    ) external {
+        require(sigs.length == ids.length, "invalid length");
+        require(sellers.length == buyers.length, "invalid length");
+        uint256 len = ids.length;
+        uint256 i;
+        unchecked {
+            do {
+               claimOrder(ids[i], buyers[i], sellers[i],amounts[i], 1 , paymentTokens[i],sigs[i]);
+            } while(++i < len);
+        }
     }
     
     /**
@@ -118,10 +147,9 @@ contract GreyMarket is Ownable, GreyMarketStorage, GreyMarketEvent, EIP712 {
         uint256 amount,
         Sig calldata sig
     ) external {
-        uint256 nonce = usedNonces[buyer];
-        if(!validateWithdrawOrder(sig, id, buyer, seller, paymentToken, amount, 6, nonce))
+        if(orders[id] ||!validateWithdrawOrder(sig, id, buyer, seller, paymentToken, amount))
             revert InvalidSignature(id, sig);
-        usedNonces[buyer] = nonce + 1;
+        orders[id] = true;
 
         if (paymentToken == address(0))
             payable(buyer).transfer(amount);
@@ -198,7 +226,6 @@ contract GreyMarket is Ownable, GreyMarketStorage, GreyMarketEvent, EIP712 {
      * @param seller Seller address
      * @param amount Amount of funds to claim
      * @param paymentToken Payment token address
-     * @param orderStatus Order status in integer value
      * @param orderType Order type
      * @return bool Whether the signature is valid or not
      */
@@ -209,9 +236,7 @@ contract GreyMarket is Ownable, GreyMarketStorage, GreyMarketEvent, EIP712 {
         address seller, 
         uint256 amount,
         address paymentToken,
-        uint8 orderType,
-        uint8 orderStatus,
-        uint256 nonce
+        uint8 orderType
     ) internal view returns(bool) {
         bytes32 digest = _hashTypedDataV4(keccak256(abi.encode(
                 CLAIM_ORDER_TYPEHASH,
@@ -220,9 +245,7 @@ contract GreyMarket is Ownable, GreyMarketStorage, GreyMarketEvent, EIP712 {
                 seller,
                 amount,
                 paymentToken,
-                orderType,
-                orderStatus,
-                nonce
+                orderType
         )));
         
         return ECDSA.recover(digest, sig.v, sig.r, sig.s) == proofSigner;
@@ -236,7 +259,6 @@ contract GreyMarket is Ownable, GreyMarketStorage, GreyMarketEvent, EIP712 {
      * @param buyer Buyer address
      * @param seller Seller address
      * @param paymentToken Token used to pay
-     * @param orderStatus Order status in integer value
      * @return bool Whether the signature is valid or not
      */
     function validateWithdrawOrder(
@@ -245,9 +267,7 @@ contract GreyMarket is Ownable, GreyMarketStorage, GreyMarketEvent, EIP712 {
         address buyer, 
         address seller, 
         address paymentToken,
-        uint256 amount,
-        uint8 orderStatus,
-        uint256 nonce
+        uint256 amount
     ) internal view returns(bool) {
         bytes32 digest = _hashTypedDataV4(keccak256(abi.encode(
                 WITHDRAW_ORDER_TYPEHASH,
@@ -255,11 +275,8 @@ contract GreyMarket is Ownable, GreyMarketStorage, GreyMarketEvent, EIP712 {
                 buyer,
                 seller,
                 paymentToken,
-                amount,
-                orderStatus,
-                nonce
+                amount
         )));
-
         return ECDSA.recover(digest, sig.v, sig.r, sig.s) == proofSigner;
     }
 

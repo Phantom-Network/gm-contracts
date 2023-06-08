@@ -29,7 +29,7 @@ contract Orders is BaseSetup {
         );
 
         uint256 sellerBalanceBefore = address(seller).balance;
-        digest = generateOrderClaimDigest(orderId, 1000000, address(0), 1, greyMarket.usedNonces(seller));
+        digest = generateOrderClaimDigest(orderId, 1000000, address(0), 1);
         (v, r, s) = vm.sign(signerPrivateKey, digest);
 
         vm.prank(seller);
@@ -65,7 +65,7 @@ contract Orders is BaseSetup {
             Sig(v, r, s)
         );
 
-        digest = generateOrderClaimDigest(orderId, 100000, address(0), 1,greyMarket.usedNonces(seller));
+        digest = generateOrderClaimDigest(orderId, 100000, address(0), 1);
         (v, r, s) = vm.sign(signerPrivateKey, digest);
         
         vm.prank(buyer);
