@@ -66,7 +66,6 @@ contract BaseSetup is Test {
         bytes32 digest = greyMarket.hash(keccak256(abi.encode(
                 CLAIM_ORDER_TYPEHASH,
                 orderId,
-                buyer,
                 seller,
                 amount,
                 paymentToken,

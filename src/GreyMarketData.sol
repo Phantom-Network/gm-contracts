@@ -10,7 +10,7 @@ bytes32 constant CREATE_ORDER_TYPEHASH =
 
 bytes32 constant CLAIM_ORDER_TYPEHASH = 
     keccak256(
-        "Claim(bytes32 id,address buyer,address seller,uint256 amount,address paymentToken,uint8 orderType)"
+        "Claim(bytes32 id,address seller,uint256 amount,address paymentToken,uint8 orderType)"
     );
     
 bytes32 constant WITHDRAW_ORDER_TYPEHASH = 
@@ -24,9 +24,16 @@ bytes32 constant RELEASE_DISPUTED_ORDER_TYPEHASH =
     );
 
 uint256 constant MAX_TRANSACTION_FEE = 10000;
-uint256 constant MAX_ESCROW_FEE = 5000;
 struct Sig {
     uint8 v;
     bytes32 r;
     bytes32 s;
+}
+
+struct Order {
+    bytes32 id;
+    address seller;
+    uint256 amount;
+    address paymentToken;
+    uint8 orderType;
 }

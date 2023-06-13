@@ -66,7 +66,6 @@ contract GreyMarket is Ownable, GreyMarketStorage, GreyMarketEvent, EIP712 {
      * @notice Claim the order fund by seller after order is delivered and confirmed.
      * @dev Claim the order fund with order information.
      * @param id Order id
-     * @param buyer Address of the buyer
      * @param seller Address of the seller
      * @param amount Amount of funds to claim
      * @param paymentToken Token used to claim funds
@@ -75,14 +74,13 @@ contract GreyMarket is Ownable, GreyMarketStorage, GreyMarketEvent, EIP712 {
      */
     function claimOrder(
         bytes32 id,
-        address buyer,
         address seller,
         uint256 amount,
         uint8 orderType,
         address paymentToken,
         Sig calldata sig
     ) public {
-        if(orders[id] || !validateClaimOrder(sig, id, buyer, seller, amount, paymentToken, orderType))
+        if(orders[id] || !validateClaimOrder(sig, id, seller, amount, paymentToken, orderType))
             revert InvalidSignature(id, sig);
         orders[id] = true;
 
@@ -96,35 +94,26 @@ contract GreyMarket is Ownable, GreyMarketStorage, GreyMarketEvent, EIP712 {
         else
             IERC20(paymentToken).transfer(seller, amount - fee + escrowFee * 90 / 100);
 
-        emit OrderCompleted(id, buyer, seller, uint128(block.timestamp));
+        emit OrderCompleted(id, seller, uint128(block.timestamp));
     }
 
 
     /**
      * @notice Claim multiple orders.
      * @dev Claim multiple orders.
-     * @param ids Order ids
-     * @param buyers The addresses of the buyers
-     * @param sellers The addresses of the sellers
-     * @param amounts Amount of funds to claim
-     * @param paymentTokens Token used to claim funds
+     * @param orders Order details
      * @param sigs Array of ECDSA signatures
      */
     function claimOrders(
-        bytes32[] calldata ids,
-        address[] calldata buyers,
-        address[] calldata sellers,
-        uint256[] calldata amounts,
-        address[] calldata paymentTokens,
+        Order[] calldata orders,
         Sig[] calldata sigs
     ) external {
-        require(sigs.length == ids.length, "invalid length");
-        require(sellers.length == buyers.length, "invalid length");
-        uint256 len = ids.length;
+        require(sigs.length == orders.length, "invalid length");
+        uint256 len = orders.length;
         uint256 i;
         unchecked {
             do {
-               claimOrder(ids[i], buyers[i], sellers[i],amounts[i], 1 , paymentTokens[i],sigs[i]);
+               claimOrder(orders[i].id,orders[i].seller,orders[i].amount, orders[i].orderType, orders[i].paymentToken,sigs[i]);
             } while(++i < len);
         }
     }
@@ -222,7 +211,6 @@ contract GreyMarket is Ownable, GreyMarketStorage, GreyMarketEvent, EIP712 {
      * @dev Validates the signature of a claim order action by verifying the signature
      * @param sig ECDSA signature
      * @param id Order id
-     * @param buyer Buyer address
      * @param seller Seller address
      * @param amount Amount of funds to claim
      * @param paymentToken Payment token address
@@ -232,7 +220,6 @@ contract GreyMarket is Ownable, GreyMarketStorage, GreyMarketEvent, EIP712 {
     function validateClaimOrder(
         Sig calldata sig,
         bytes32 id, 
-        address buyer, 
         address seller, 
         uint256 amount,
         address paymentToken,
@@ -241,13 +228,11 @@ contract GreyMarket is Ownable, GreyMarketStorage, GreyMarketEvent, EIP712 {
         bytes32 digest = _hashTypedDataV4(keccak256(abi.encode(
                 CLAIM_ORDER_TYPEHASH,
                 id,
-                buyer,
                 seller,
                 amount,
                 paymentToken,
                 orderType
         )));
-        
         return ECDSA.recover(digest, sig.v, sig.r, sig.s) == proofSigner;
     }
 

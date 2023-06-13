@@ -16,12 +16,7 @@ contract GreyMarketEvent {
 
     event OrderCancelled(bytes32 id, address indexed buyer, address indexed seller, uint256 blockTimestamp);
 
-    event OrderCompleted(bytes32 id, address indexed buyer, address indexed seller, uint256 blockTimestamp);
-
-
-
-
-
+    event OrderCompleted(bytes32 id, address indexed seller, uint256 blockTimestamp);
 
     event WithdrawAdminFee(address caller, address recipient, address token, uint256 amount);
 
