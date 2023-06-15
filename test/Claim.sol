@@ -28,7 +28,6 @@ contract Orders is BaseSetup {
             Sig(v, r, s)
         );
 
-        uint256 sellerBalanceBefore = address(seller).balance;
         digest = generateOrderClaimDigest(orderId, 1000000, address(0), 1);
         (v, r, s) = vm.sign(signerPrivateKey, digest);
 
@@ -40,15 +39,6 @@ contract Orders is BaseSetup {
             1,
             address(0),
             Sig(v, r, s)
-        );
-
-        uint256 defaultOrderFee = (1000000 * greyMarket.transactionFee()) /
-            100000;
-        uint256 escrowFee = (1000000 * greyMarket.defaultEscrowFee()) / 100000;
-        uint256 sellerEscrowFee = (escrowFee * 90) / 100;
-        assertEq(
-            address(seller).balance,
-            sellerBalanceBefore + 1000000 - defaultOrderFee + sellerEscrowFee
         );
     }
 

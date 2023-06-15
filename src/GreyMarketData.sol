@@ -18,12 +18,6 @@ bytes32 constant WITHDRAW_ORDER_TYPEHASH =
         "Withdraw(bytes32 id,address buyer,address seller,address paymentToken,uint256 amount)"
     );
 
-bytes32 constant RELEASE_DISPUTED_ORDER_TYPEHASH = 
-    keccak256(
-        "Release(bytes32 id,address buyer,address seller,address paymentToken,address winner,uint8 orderStatus)"
-    );
-
-uint256 constant MAX_TRANSACTION_FEE = 10000;
 struct Sig {
     uint8 v;
     bytes32 r;

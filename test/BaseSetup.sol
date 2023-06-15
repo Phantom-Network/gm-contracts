@@ -87,18 +87,4 @@ contract BaseSetup is Test {
 
         return digest;
     }
-
-    function generateDisputeDigest(bytes32 orderId, address winner, address paymentToken) public view returns(bytes32) {
-        bytes32 digest = greyMarket.hash(keccak256(abi.encode(
-                RELEASE_DISPUTED_ORDER_TYPEHASH,
-                orderId,
-                buyer,
-                seller,
-                paymentToken,
-                winner,
-                8
-        )));
-
-        return digest;
-    }
 }

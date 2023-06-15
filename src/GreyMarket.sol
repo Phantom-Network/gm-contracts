@@ -53,11 +53,7 @@ contract GreyMarket is Ownable, GreyMarketStorage, GreyMarketEvent, EIP712 {
 
         emit OrderCreated(
             id, 
-            msg.sender, 
-            seller, 
-            uint8(paymentToken == address(0) ? 0 : 1), 
-            orderType, 
-            uint128(block.timestamp), 
+            paymentToken,
             amount
         );
     }
@@ -83,18 +79,11 @@ contract GreyMarket is Ownable, GreyMarketStorage, GreyMarketEvent, EIP712 {
         if(orders[id] || !validateClaimOrder(sig, id, seller, amount, paymentToken, orderType))
             revert InvalidSignature(id, sig);
         orders[id] = true;
-
-        uint256 fee = amount * transactionFee / 100000;
-        uint256 escrowFee;
-        if(orderType == 1) { 
-            escrowFee = amount * defaultEscrowFee / 100000;
-        }
         if (paymentToken == address(0))
-            payable(seller).transfer(amount - fee + escrowFee * 90 / 100);
+            payable(seller).transfer(amount);
         else
-            IERC20(paymentToken).transfer(seller, amount - fee + escrowFee * 90 / 100);
-
-        emit OrderCompleted(id, seller, uint128(block.timestamp));
+            IERC20(paymentToken).transfer(seller, amount);
+        emit OrderCompleted(id);
     }
 
 
@@ -145,7 +134,7 @@ contract GreyMarket is Ownable, GreyMarketStorage, GreyMarketEvent, EIP712 {
         else
             IERC20(paymentToken).transfer(buyer, amount);
 
-        emit OrderCancelled(id, buyer, seller, uint128(block.timestamp));
+        emit OrderCancelled(id);
     }
 
 
@@ -159,17 +148,6 @@ contract GreyMarket is Ownable, GreyMarketStorage, GreyMarketEvent, EIP712 {
         proofSigner = newProofSigner;
         emit NewProofSigner(proofSigner);
     }
-
-    /**
-     * @notice Sets the transaction fee 
-     * @dev Admin function to set the transaction fee
-     * @param newFee escrow fee recipient.
-     */
-     function setTransactionFee(uint256 newFee) external onlyOwner {
-        require(newFee <= MAX_TRANSACTION_FEE, "invalid fee range");
-        transactionFee = newFee;
-        emit NewTransactionFee(newFee);
-     }
 
 
     /**
@@ -285,6 +263,6 @@ contract GreyMarket is Ownable, GreyMarketStorage, GreyMarketEvent, EIP712 {
             payable(recipient).transfer(amount);
         else
             IERC20(token).transfer(recipient, amount);
-        emit WithdrawAdminFee(msg.sender, recipient, token, amount);
+        emit WithdrawAdminFee(token, amount);
     }
 }

@@ -12,13 +12,12 @@ pragma solidity ^0.8.9;
 contract GreyMarketEvent {
     event NewProofSigner(address newProofSigner);
 
-    event OrderCreated(bytes32 id, address indexed buyer, address indexed seller, uint8 paymentType, uint8 orderType, uint256 blockTimestamp, uint256 amount);
+    event OrderCreated(bytes32 id, address paymentType, uint256 amount);
 
-    event OrderCancelled(bytes32 id, address indexed buyer, address indexed seller, uint256 blockTimestamp);
+    event OrderCancelled(bytes32 id);
 
-    event OrderCompleted(bytes32 id, address indexed seller, uint256 blockTimestamp);
+    event OrderCompleted(bytes32 id);
 
-    event WithdrawAdminFee(address caller, address recipient, address token, uint256 amount);
+    event WithdrawAdminFee(address token, uint256 amount);
 
-    event NewTransactionFee(uint256 newTransactionFee);
 }
