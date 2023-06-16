@@ -40,7 +40,7 @@ contract BaseSetup is Test {
         unsupportedMockERC20 = new MockERC20(buyer);
         
         vm.startPrank(owner);
-        greyMarket = new GreyMarket(signer, address(mockERC20));
+        greyMarket = new GreyMarket(signer);
         vm.stopPrank();
     }
 

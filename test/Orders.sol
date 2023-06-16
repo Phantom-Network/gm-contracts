@@ -14,7 +14,7 @@ contract Orders is BaseSetup {
 
     function testCreateOrderERC20TokenEscrow() public {
         bytes32 orderId = randomOrderID();
-        bytes32 digest = generateOrderDigest(orderId, 1, address(mockERC20));
+        bytes32 digest = generateOrderDigest(orderId, 0, address(mockERC20));
 
         uint256 balanceBefore = address(buyer).balance;
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPrivateKey, digest);
@@ -25,7 +25,7 @@ contract Orders is BaseSetup {
             orderId, 
             seller, 
             address(mockERC20),
-            1, 
+            0, 
             1000000, 
             Sig(v, r, s)
         );
@@ -35,7 +35,7 @@ contract Orders is BaseSetup {
 
     function testCreateOrderNativeTokenDirect() public {
         bytes32 orderId = randomOrderID();
-        bytes32 digest = generateOrderDigest(orderId, 0, address(0));
+        bytes32 digest = generateOrderDigest(orderId, 1, address(0));
 
         uint256 balanceBefore = address(buyer).balance;
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPrivateKey, digest);
@@ -45,7 +45,7 @@ contract Orders is BaseSetup {
             orderId, 
             seller, 
             address(0), 
-            0, 
+            1, 
             1000000,
             Sig(v, r, s)
         );
@@ -76,7 +76,7 @@ contract Orders is BaseSetup {
 
     function testCreateOrderERC20Token() public {
         bytes32 orderId = randomOrderID();
-        bytes32 digest = generateOrderDigest(orderId, 0, address(mockERC20));
+        bytes32 digest = generateOrderDigest(orderId, 1, address(mockERC20));
 
         uint256 balanceBefore = mockERC20.balanceOf(buyer);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPrivateKey, digest);
@@ -87,7 +87,7 @@ contract Orders is BaseSetup {
             orderId, 
             seller, 
             address(mockERC20), 
-            0, 
+            1, 
             1000000, 
             Sig(v, r, s)
         );

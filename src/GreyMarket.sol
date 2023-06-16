@@ -16,14 +16,13 @@ error InvalidSignature(bytes32 orderId, Sig sig);
  * @title gm.co
  * @custom:version 1.1
  * @author projectPXN
- * @custom:coauthor bldr
  * @notice gm.co is a Business-to-Consumer (B2C) and Peer-to-Peer (P2P) marketplace
  *         using blockchain technology for proof of transactions and allow users
  *         to buy and sell real world goods using cryptocurrency.
  */
-contract GreyMarket is Ownable, GreyMarketStorage, GreyMarketEvent, EIP712 {
-    constructor(address _proofSigner, address _erc20) EIP712("GreyMarket Contract", "1.1.0") {
-        require(_erc20 != address(0) && _proofSigner != address(0), "invalid token or signer address");
+contract GreyMarket is Ownable, GreyMarketStorage, GreyMarketEvent, EIP712, ReentrancyGuard {
+    constructor(address _proofSigner) EIP712("GreyMarket Contract", "1.1.0") {
+        require(_proofSigner != address(0), "invalid token or signer address");
         proofSigner = _proofSigner;
     }
 
@@ -47,6 +46,8 @@ contract GreyMarket is Ownable, GreyMarketStorage, GreyMarketEvent, EIP712 {
     ) external payable {
         if(!validateCreateOrder(sig, id, msg.sender, seller, paymentToken, orderType, amount))
             revert InvalidSignature(id, sig);
+        if (paymentToken == address(0))
+            require(msg.value >= amount, "insufficient eth sent");
 
         if(paymentToken != address(0))
             IERC20(paymentToken).transferFrom(msg.sender, address(this), amount);
@@ -75,7 +76,7 @@ contract GreyMarket is Ownable, GreyMarketStorage, GreyMarketEvent, EIP712 {
         uint8 orderType,
         address paymentToken,
         Sig calldata sig
-    ) public {
+    ) public nonReentrant {
         if(orders[id] || !validateClaimOrder(sig, id, seller, amount, paymentToken, orderType))
             revert InvalidSignature(id, sig);
         orders[id] = true;
@@ -124,7 +125,7 @@ contract GreyMarket is Ownable, GreyMarketStorage, GreyMarketEvent, EIP712 {
         address paymentToken,
         uint256 amount,
         Sig calldata sig
-    ) external {
+    ) external nonReentrant {
         if(orders[id] ||!validateWithdrawOrder(sig, id, buyer, seller, paymentToken, amount))
             revert InvalidSignature(id, sig);
         orders[id] = true;
